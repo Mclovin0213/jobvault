@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { generateText } from 'ai'
+import { minimax } from 'vercel-minimax-ai-provider'
 
 const MAX_HTML_BYTES = 1_000_000
 const FETCH_TIMEOUT_MS = 12_000
@@ -84,68 +86,49 @@ async function fetchPage(url: string): Promise<{ ok: true; text: string } | { ok
 
 const SYSTEM_PROMPT =
   'You extract structured fields from a job-posting web page. ' +
-  'Return ONLY a JSON object with these string keys: company, role, salary, location, workArrangement, source. ' +
+  'You MUST respond with ONLY a raw JSON object — no markdown, no code fences, no commentary, nothing else. ' +
+  'The JSON must have exactly these string keys: company, role, salary, location, workArrangement, source. ' +
   'Rules: ' +
   '- workArrangement MUST be one of: "remote", "hybrid", "onsite", or "" (empty if unclear). ' +
   '- source is the platform/board (e.g. "LinkedIn", "Greenhouse", "Lever", "company site", "Indeed"). Infer from URL/branding. ' +
   '- salary: keep original currency/range as written; "" if not stated. ' +
   '- Use "" (empty string) for any unknown field. Do NOT guess. ' +
-  '- No commentary, no markdown, no code fences. Just the JSON object.'
+  'Example output: {"company":"Acme Corp","role":"Software Engineer","salary":"$120k-$150k","location":"New York, NY","workArrangement":"hybrid","source":"Greenhouse"}'
 
 async function callMinimax(url: string, text: string): Promise<{ ok: true; extracted: ExtractedFields } | { ok: false; error: string }> {
-  const apiKey = process.env.MINIMAX_API_KEY
-  if (!apiKey) return { ok: false, error: 'missing_MINIMAX_API_KEY' }
-  const baseUrl = process.env.MINIMAX_BASE_URL || 'https://api.minimax.io/v1'
-  const model = process.env.MINIMAX_MODEL || 'MiniMax-Text-01'
+  if (!process.env.MINIMAX_API_KEY) return { ok: false, error: 'missing_MINIMAX_API_KEY' }
+  const modelId = process.env.MINIMAX_MODEL || 'MiniMax-M2.5'
 
-  const body = {
-    model,
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: `URL: ${url}\n\nPAGE CONTENT:\n${text}\n\nReturn the JSON object now.`,
-      },
-    ],
-    temperature: 0.1,
-    response_format: { type: 'json_object' },
-  }
-
-  let res: Response
+  let result: Awaited<ReturnType<typeof generateText>>
   try {
-    res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(body),
+    result = await generateText({
+      model: minimax(modelId),
+      system: SYSTEM_PROMPT,
+      prompt: `URL: ${url}\n\nPAGE CONTENT:\n${text}\n\nReturn the JSON object now.`,
+      temperature: 0.1,
     })
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'llm_network' }
+    const msg = e instanceof Error ? e.message : 'llm_call_failed'
+    return { ok: false, error: `llm_error: ${msg.slice(0, 300)}` }
   }
 
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '')
-    return { ok: false, error: `llm_${res.status}${errText ? `: ${errText.slice(0, 200)}` : ''}` }
-  }
-
-  let json: unknown
-  try {
-    json = await res.json()
-  } catch {
-    return { ok: false, error: 'llm_invalid_json' }
-  }
-
-  const content = (json as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content
-  if (!content) return { ok: false, error: 'llm_empty_content' }
+  const answer = result.text.trim()
+  console.log('[extract] LLM text:', answer)
+  if (result.reasoning) console.log('[extract] LLM reasoning length:', result.reasoning.length)
 
   let parsed: Partial<ExtractedFields>
   try {
-    const cleaned = content.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
-    parsed = JSON.parse(cleaned)
-  } catch {
-    return { ok: false, error: 'llm_unparseable_json' }
+    // Some models still wrap in fences even when asked not to — strip them.
+    const stripped = answer
+      .replace(/```(?:json)?\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim()
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('no JSON object found')
+    parsed = JSON.parse(jsonMatch[0])
+  } catch (e) {
+    console.error('[extract] parse failed. text was:', answer, 'error:', e)
+    return { ok: false, error: `llm_unparseable_json: ${answer.slice(0, 300)}` }
   }
 
   const wa = (parsed.workArrangement ?? '').toString().toLowerCase()
@@ -177,14 +160,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
+  console.log('[extract] fetching:', url)
   const page = await fetchPage(url)
   if (!page.ok) {
+    console.error('[extract] fetch failed:', page.error)
     res.status(200).json({ error: page.error })
     return
   }
+  console.log('[extract] page text length:', page.text.length)
 
   const llm = await callMinimax(url, page.text)
   if (!llm.ok) {
+    console.error('[extract] LLM failed:', llm.error)
     res.status(200).json({ error: llm.error })
     return
   }

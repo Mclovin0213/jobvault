@@ -172,16 +172,16 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
         <StatusPill p={p} />
       </div>
       <div className="col-span-6 md:col-span-2">
-        <ExtractedCell key={`c-${p.id}`} id={p.id} field="company" initial={p.extracted.company} placeholder="Company" />
+        <ExtractedCell key={`c-${p.id}-${p.extraction}`} id={p.id} field="company" initial={p.extracted.company} placeholder="Company" />
       </div>
       <div className="col-span-6 md:col-span-2">
-        <ExtractedCell key={`r-${p.id}`} id={p.id} field="role" initial={p.extracted.role} placeholder="Role" />
+        <ExtractedCell key={`r-${p.id}-${p.extraction}`} id={p.id} field="role" initial={p.extracted.role} placeholder="Role" />
       </div>
       <div className="col-span-6 md:col-span-1">
-        <ExtractedCell key={`s-${p.id}`} id={p.id} field="salary" initial={p.extracted.salary} placeholder="$" />
+        <ExtractedCell key={`s-${p.id}-${p.extraction}`} id={p.id} field="salary" initial={p.extracted.salary} placeholder="$" />
       </div>
       <div className="col-span-6 md:col-span-1">
-        <ExtractedCell key={`l-${p.id}`} id={p.id} field="location" initial={p.extracted.location} placeholder="Loc" />
+        <ExtractedCell key={`l-${p.id}-${p.extraction}`} id={p.id} field="location" initial={p.extracted.location} placeholder="Loc" />
       </div>
       <div className="col-span-6 md:col-span-1">
         <Select
@@ -205,7 +205,7 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
         </Select>
       </div>
       <div className="col-span-6 md:col-span-1">
-        <ExtractedCell key={`src-${p.id}`} id={p.id} field="source" initial={p.extracted.source} placeholder="Source" />
+        <ExtractedCell key={`src-${p.id}-${p.extraction}`} id={p.id} field="source" initial={p.extracted.source} placeholder="Source" />
       </div>
       <div className="col-span-12 flex items-center justify-end gap-1 md:col-span-1">
         <Button

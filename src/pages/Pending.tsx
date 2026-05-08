@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   collection,
   deleteDoc,
@@ -24,44 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useDebouncedSaver, useReconciledDraft } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
-
-function useDebouncedExtractedUpdate(id: string, field: keyof ExtractedFields) {
-  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  return (value: string) => {
-    if (timeout.current) clearTimeout(timeout.current)
-    timeout.current = setTimeout(() => {
-      void updateDoc(doc(db, 'pendingUrls', id), { [`extracted.${field}`]: value }).catch(e => {
-        toast.error(e instanceof Error ? e.message : 'Save failed')
-      })
-    }, 500)
-  }
-}
-
-function ExtractedCell({
-  initial,
-  field,
-  id,
-  placeholder,
-}: {
-  initial: string
-  field: keyof ExtractedFields
-  id: string
-  placeholder?: string
-}) {
-  const [value, setValue] = useState(initial)
-  const save = useDebouncedExtractedUpdate(id, field)
-  return (
-    <Input
-      value={value}
-      placeholder={placeholder}
-      onChange={e => {
-        setValue(e.target.value)
-        save(e.target.value)
-      }}
-    />
-  )
-}
 
 function StatusPill({ p }: { p: PendingUrl }) {
   if (p.extraction === 'loading') {
@@ -95,55 +59,6 @@ function StatusPill({ p }: { p: PendingUrl }) {
   )
 }
 
-async function reextract(id: string, url: string) {
-  const ref = doc(db, 'pendingUrls', id)
-  await updateDoc(ref, { extraction: 'loading', extractError: '' }).catch(() => {})
-  const result = await extractUrl(url)
-  if (result.ok) {
-    await updateDoc(ref, {
-      extraction: 'done',
-      extracted: result.extracted,
-      extractError: '',
-    }).catch(e => toast.error(e instanceof Error ? e.message : 'Save failed'))
-  } else {
-    await updateDoc(ref, {
-      extraction: 'error',
-      extractError: result.error,
-    }).catch(() => {})
-    toast.error(`Extract failed: ${result.error}`)
-  }
-}
-
-async function approve(p: PendingUrl, user: User) {
-  const batch = writeBatch(db)
-  const newRef = doc(collection(db, 'applications'))
-  batch.set(newRef, {
-    url: p.url,
-    company: p.extracted.company ?? '',
-    role: p.extracted.role ?? '',
-    salary: p.extracted.salary ?? '',
-    location: p.extracted.location ?? '',
-    workArrangement: p.extracted.workArrangement ?? '',
-    source: p.extracted.source ?? '',
-    tags: [],
-    status: 'pending',
-    notes: '',
-    deadline: null,
-    followUpDate: null,
-    appliedAt: null,
-    createdAt: serverTimestamp(),
-    addedBy: p.addedBy || user.uid,
-    addedByName: p.addedByName || (user.displayName ?? user.email ?? 'Unknown'),
-  })
-  batch.delete(doc(db, 'pendingUrls', p.id))
-  try {
-    await batch.commit()
-    toast.success('Approved → moved to Applications')
-  } catch (e) {
-    toast.error(e instanceof Error ? e.message : 'Approve failed')
-  }
-}
-
 async function reject(id: string) {
   if (!confirm('Reject and discard this link?')) return
   try {
@@ -154,8 +69,125 @@ async function reject(id: string) {
   }
 }
 
+function ExtractedCell({
+  remote,
+  onChange,
+  onBlur,
+  placeholder,
+}: {
+  remote: string
+  onChange: (value: string) => void
+  onBlur: () => void
+  placeholder?: string
+}) {
+  const draft = useReconciledDraft(remote)
+  return (
+    <Input
+      value={draft.value}
+      placeholder={placeholder}
+      onFocus={draft.onFocus}
+      onBlur={() => {
+        draft.onBlur()
+        onBlur()
+      }}
+      onChange={e => {
+        draft.setValue(e.target.value)
+        onChange(e.target.value)
+      }}
+    />
+  )
+}
+
 function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
   const [busy, setBusy] = useState<'approve' | 'reextract' | null>(null)
+  const pendingPatchRef = useRef<Partial<ExtractedFields>>({})
+  const latestExtractedRef = useRef<ExtractedFields>(p.extracted)
+  useEffect(() => {
+    latestExtractedRef.current = { ...p.extracted, ...pendingPatchRef.current }
+  }, [p.extracted])
+
+  const saver = useDebouncedSaver<Partial<ExtractedFields>>(async patch => {
+    if (Object.keys(patch).length === 0) return
+    pendingPatchRef.current = {}
+    const update: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) update[`extracted.${k}`] = v
+    try {
+      await updateDoc(doc(db, 'pendingUrls', p.id), update)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    }
+  })
+
+  const queue = useCallback(
+    <K extends keyof ExtractedFields>(field: K, value: ExtractedFields[K]) => {
+      pendingPatchRef.current = { ...pendingPatchRef.current, [field]: value }
+      latestExtractedRef.current = { ...latestExtractedRef.current, [field]: value }
+      saver.schedule(pendingPatchRef.current)
+    },
+    [saver],
+  )
+
+  const approve = useCallback(async () => {
+    await saver.flush()
+    const draft: ExtractedFields = latestExtractedRef.current
+    pendingPatchRef.current = {}
+    const batch = writeBatch(db)
+    const newRef = doc(collection(db, 'applications'))
+    batch.set(newRef, {
+      url: p.url,
+      company: draft.company ?? '',
+      role: draft.role ?? '',
+      salary: draft.salary ?? '',
+      location: draft.location ?? '',
+      workArrangement: draft.workArrangement ?? '',
+      source: draft.source ?? '',
+      tags: [],
+      status: 'pending',
+      notes: '',
+      deadline: null,
+      followUpDate: null,
+      appliedAt: null,
+      createdAt: serverTimestamp(),
+      addedBy: p.addedBy || user.uid,
+      addedByName: p.addedByName || (user.displayName ?? user.email ?? 'Unknown'),
+    })
+    batch.delete(doc(db, 'pendingUrls', p.id))
+    try {
+      await batch.commit()
+      toast.success('Approved → moved to Applications')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Approve failed')
+    }
+  }, [p, user, saver])
+
+  const reextract = useCallback(async () => {
+    await saver.flush()
+    const ref = doc(db, 'pendingUrls', p.id)
+    await updateDoc(ref, { extraction: 'loading', extractError: '' }).catch(() => {})
+    const result = await extractUrl(p.url)
+    if (result.ok) {
+      latestExtractedRef.current = result.extracted
+      pendingPatchRef.current = {}
+      await updateDoc(ref, {
+        extraction: 'done',
+        extracted: result.extracted,
+        extractError: '',
+      }).catch(e => toast.error(e instanceof Error ? e.message : 'Save failed'))
+    } else {
+      await updateDoc(ref, {
+        extraction: 'error',
+        extractError: result.error,
+      }).catch(() => {})
+      toast.error(`Extract failed: ${result.error}`)
+    }
+  }, [p.id, p.url, saver])
+
+  const handleReject = useCallback(async () => {
+    await saver.cancel()
+    pendingPatchRef.current = {}
+    await reject(p.id)
+  }, [p.id, saver])
+
   return (
     <div className="grid grid-cols-12 gap-2 border-b px-3 py-3 hover:bg-[var(--color-accent)]/40">
       <div className="col-span-12 flex items-center gap-2 md:col-span-3">
@@ -172,23 +204,44 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
         <StatusPill p={p} />
       </div>
       <div className="col-span-6 md:col-span-2">
-        <ExtractedCell key={`c-${p.id}-${p.extraction}`} id={p.id} field="company" initial={p.extracted.company} placeholder="Company" />
+        <ExtractedCell
+          remote={p.extracted.company}
+          placeholder="Company"
+          onChange={v => queue('company', v)}
+          onBlur={() => void saver.flush()}
+        />
       </div>
       <div className="col-span-6 md:col-span-2">
-        <ExtractedCell key={`r-${p.id}-${p.extraction}`} id={p.id} field="role" initial={p.extracted.role} placeholder="Role" />
+        <ExtractedCell
+          remote={p.extracted.role}
+          placeholder="Role"
+          onChange={v => queue('role', v)}
+          onBlur={() => void saver.flush()}
+        />
       </div>
       <div className="col-span-6 md:col-span-1">
-        <ExtractedCell key={`s-${p.id}-${p.extraction}`} id={p.id} field="salary" initial={p.extracted.salary} placeholder="$" />
+        <ExtractedCell
+          remote={p.extracted.salary}
+          placeholder="$"
+          onChange={v => queue('salary', v)}
+          onBlur={() => void saver.flush()}
+        />
       </div>
       <div className="col-span-6 md:col-span-1">
-        <ExtractedCell key={`l-${p.id}-${p.extraction}`} id={p.id} field="location" initial={p.extracted.location} placeholder="Loc" />
+        <ExtractedCell
+          remote={p.extracted.location}
+          placeholder="Loc"
+          onChange={v => queue('location', v)}
+          onBlur={() => void saver.flush()}
+        />
       </div>
       <div className="col-span-6 md:col-span-1">
         <Select
           value={p.extracted.workArrangement || '__none__'}
           onValueChange={v => {
             const next = (v === '__none__' ? '' : v) as WorkArrangement
-            void updateDoc(doc(db, 'pendingUrls', p.id), { 'extracted.workArrangement': next })
+            queue('workArrangement', next)
+            void saver.flush()
           }}
         >
           <SelectTrigger className="h-9">
@@ -205,7 +258,12 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
         </Select>
       </div>
       <div className="col-span-6 md:col-span-1">
-        <ExtractedCell key={`src-${p.id}-${p.extraction}`} id={p.id} field="source" initial={p.extracted.source} placeholder="Source" />
+        <ExtractedCell
+          remote={p.extracted.source}
+          placeholder="Source"
+          onChange={v => queue('source', v)}
+          onBlur={() => void saver.flush()}
+        />
       </div>
       <div className="col-span-12 flex items-center justify-end gap-1 md:col-span-1">
         <Button
@@ -215,7 +273,7 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
           disabled={busy !== null || p.extraction === 'loading'}
           onClick={async () => {
             setBusy('reextract')
-            await reextract(p.id, p.url)
+            await reextract()
             setBusy(null)
           }}
         >
@@ -228,7 +286,7 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
           disabled={busy !== null}
           onClick={async () => {
             setBusy('approve')
-            await approve(p, user)
+            await approve()
             setBusy(null)
           }}
         >
@@ -239,7 +297,7 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
           size="icon"
           title="Reject"
           disabled={busy !== null}
-          onClick={() => void reject(p.id)}
+          onClick={() => void handleReject()}
         >
           <Trash2 className="size-4 text-[var(--color-destructive)]" />
         </Button>

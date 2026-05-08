@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import { deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/StatusBadge'
 import { hostnameOf } from '@/lib/urls'
+import { useDebouncedSaver, useReconciledDraft } from '@/lib/hooks'
 import {
   Select,
   SelectContent,
@@ -17,60 +18,89 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-function useDebouncedFieldUpdate(id: string, field: keyof Application) {
-  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-  return (value: string | string[]) => {
-    if (timeout.current) clearTimeout(timeout.current)
-    timeout.current = setTimeout(() => {
-      void updateDoc(doc(db, 'applications', id), { [field]: value }).catch(e => {
-        toast.error(e instanceof Error ? e.message : 'Save failed')
-      })
-    }, 500)
-  }
+type FieldUpdate = Partial<Pick<Application, 'company' | 'role' | 'salary' | 'location' | 'source' | 'notes' | 'tags'>>
+
+function useRowSaver(id: string) {
+  const pendingRef = useRef<FieldUpdate>({})
+  const saver = useDebouncedSaver<FieldUpdate>(async update => {
+    if (Object.keys(update).length === 0) return
+    pendingRef.current = {}
+    try {
+      await updateDoc(doc(db, 'applications', id), update)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    }
+  })
+  const queue = useCallback(
+    (patch: FieldUpdate) => {
+      pendingRef.current = { ...pendingRef.current, ...patch }
+      saver.schedule(pendingRef.current)
+    },
+    [saver],
+  )
+  return { queue, flush: saver.flush, cancel: saver.cancel }
 }
 
 function EditableCell({
   initial,
   field,
-  id,
+  onChange,
+  onBlur,
   placeholder,
   className,
 }: {
   initial: string
   field: keyof Application
-  id: string
+  onChange: (patch: FieldUpdate) => void
+  onBlur: () => void
   placeholder?: string
   className?: string
 }) {
-  const [value, setValue] = useState(initial)
-  const debouncedSave = useDebouncedFieldUpdate(id, field)
+  const draft = useReconciledDraft(initial)
   return (
     <Input
-      value={value}
+      value={draft.value}
       placeholder={placeholder}
-      onChange={e => {
-        setValue(e.target.value)
-        debouncedSave(e.target.value)
-      }}
       className={className}
+      onFocus={draft.onFocus}
+      onBlur={() => {
+        draft.onBlur()
+        onBlur()
+      }}
+      onChange={e => {
+        draft.setValue(e.target.value)
+        onChange({ [field]: e.target.value } as FieldUpdate)
+      }}
     />
   )
 }
 
-function TagsCell({ id, tags }: { id: string; tags: string[] }) {
-  const [value, setValue] = useState(tags.join(', '))
-  const debouncedSave = useDebouncedFieldUpdate(id, 'tags')
+function TagsCell({
+  tags,
+  onChange,
+  onBlur,
+}: {
+  tags: string[]
+  onChange: (patch: FieldUpdate) => void
+  onBlur: () => void
+}) {
+  const draft = useReconciledDraft(tags.join(', '))
   return (
     <Input
-      value={value}
+      value={draft.value}
       placeholder="frontend, dream-job"
+      onFocus={draft.onFocus}
+      onBlur={() => {
+        draft.onBlur()
+        onBlur()
+      }}
       onChange={e => {
-        setValue(e.target.value)
+        draft.setValue(e.target.value)
         const parsed = e.target.value
           .split(',')
           .map(s => s.trim())
           .filter(Boolean)
-        debouncedSave(parsed)
+        onChange({ tags: parsed })
       }}
     />
   )
@@ -88,17 +118,20 @@ async function handleStatusChange(app: Application, status: Status) {
   }
 }
 
-async function handleDelete(id: string) {
-  if (!confirm('Delete this application?')) return
-  try {
-    await deleteDoc(doc(db, 'applications', id))
-    toast.success('Deleted')
-  } catch (e) {
-    toast.error(e instanceof Error ? e.message : 'Delete failed')
-  }
-}
-
 export function ApplicationRow({ app }: { app: Application }) {
+  const row = useRowSaver(app.id)
+
+  const handleDelete = useCallback(async () => {
+    if (!confirm('Delete this application?')) return
+    await row.cancel()
+    try {
+      await deleteDoc(doc(db, 'applications', app.id))
+      toast.success('Deleted')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Delete failed')
+    }
+  }, [app.id, row])
+
   return (
     <div className="grid grid-cols-12 gap-2 border-b px-3 py-2 hover:bg-[var(--color-accent)]/40">
       <div className="col-span-12 flex items-center gap-2 md:col-span-3">
@@ -114,16 +147,16 @@ export function ApplicationRow({ app }: { app: Application }) {
         </a>
       </div>
       <div className="col-span-6 md:col-span-2">
-        <EditableCell id={app.id} field="company" initial={app.company} placeholder="Company" />
+        <EditableCell field="company" initial={app.company} placeholder="Company" onChange={row.queue} onBlur={() => void row.flush()} />
       </div>
       <div className="col-span-6 md:col-span-2">
-        <EditableCell id={app.id} field="role" initial={app.role} placeholder="Role" />
+        <EditableCell field="role" initial={app.role} placeholder="Role" onChange={row.queue} onBlur={() => void row.flush()} />
       </div>
       <div className="col-span-6 md:col-span-1">
-        <EditableCell id={app.id} field="salary" initial={app.salary} placeholder="$" />
+        <EditableCell field="salary" initial={app.salary} placeholder="$" onChange={row.queue} onBlur={() => void row.flush()} />
       </div>
       <div className="col-span-6 md:col-span-1">
-        <EditableCell id={app.id} field="location" initial={app.location} placeholder="Loc" />
+        <EditableCell field="location" initial={app.location} placeholder="Loc" onChange={row.queue} onBlur={() => void row.flush()} />
       </div>
       <div className="col-span-6 md:col-span-1">
         <Select
@@ -147,7 +180,7 @@ export function ApplicationRow({ app }: { app: Application }) {
         </Select>
       </div>
       <div className="col-span-6 md:col-span-1">
-        <EditableCell id={app.id} field="source" initial={app.source} placeholder="Source" />
+        <EditableCell field="source" initial={app.source} placeholder="Source" onChange={row.queue} onBlur={() => void row.flush()} />
       </div>
       <div className="col-span-12 md:col-span-1">
         <Select value={app.status} onValueChange={v => void handleStatusChange(app, v as Status)}>
@@ -167,16 +200,16 @@ export function ApplicationRow({ app }: { app: Application }) {
       </div>
       <div className="col-span-12 grid grid-cols-12 gap-2 md:col-span-12 md:pl-[25%]">
         <div className="col-span-6">
-          <TagsCell id={app.id} tags={app.tags} />
+          <TagsCell tags={app.tags} onChange={row.queue} onBlur={() => void row.flush()} />
         </div>
         <div className="col-span-5">
-          <EditableCell id={app.id} field="notes" initial={app.notes} placeholder="Notes" />
+          <EditableCell field="notes" initial={app.notes} placeholder="Notes" onChange={row.queue} onBlur={() => void row.flush()} />
         </div>
         <div className="col-span-1 flex items-center justify-end">
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => void handleDelete(app.id)}
+            onClick={() => void handleDelete()}
             title="Delete"
           >
             <Trash2 className="size-4 text-[var(--color-destructive)]" />

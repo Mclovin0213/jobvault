@@ -1,14 +1,26 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { generateText } from 'ai'
 import { minimax } from 'vercel-minimax-ai-provider'
+import { requireAllowedUser } from './_lib/requireAllowedUser'
+import { resolveSafeUrl, safeUrl, type ResolvedAddress } from './_lib/safeUrl'
+import { rateLimit } from './_lib/rateLimit'
+import { htmlToText } from './_lib/htmlToText'
 
 const MAX_HTML_BYTES = 1_000_000
 const FETCH_TIMEOUT_MS = 12_000
-const MAX_TEXT_CHARS = 15_000
+const MAX_REDIRECTS = 3
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/123.0 Safari/537.36'
+
+type ResponseSnapshot = {
+  status: number
+  headers: Record<string, string | string[] | undefined>
+  body: Buffer
+}
 
 type ExtractedFields = {
   company: string
@@ -28,53 +40,34 @@ const EMPTY: ExtractedFields = {
   source: '',
 }
 
-function htmlToText(html: string): string {
-  return html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
-    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
-    .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, m => {
-      const titleMatch = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(m)
-      const ogs = Array.from(m.matchAll(/<meta[^>]+(?:property|name)=["']([^"']+)["'][^>]+content=["']([^"']+)["']/gi))
-        .filter(([, k]) => /og:|twitter:|description/i.test(k))
-        .map(([, k, v]) => `${k}: ${v}`)
-        .join('\n')
-      const ld = Array.from(m.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))
-        .map(([, body]) => body)
-        .join('\n')
-      return ['TITLE:', titleMatch?.[1] ?? '', ogs, 'JSONLD:', ld].join('\n')
-    })
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-async function fetchPage(url: string): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+async function fetchPage(
+  initialUrl: string,
+): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    const res = await fetch(url, {
-      headers: {
-        'user-agent': UA,
-        accept: 'text/html,application/xhtml+xml',
-        'accept-language': 'en-US,en;q=0.9',
-      },
-      signal: controller.signal,
-      redirect: 'follow',
-    })
-    if (!res.ok) return { ok: false, error: `fetch_${res.status}` }
-    const buf = await res.arrayBuffer()
-    if (buf.byteLength === 0) return { ok: false, error: 'empty_response' }
-    const slice = buf.byteLength > MAX_HTML_BYTES ? buf.slice(0, MAX_HTML_BYTES) : buf
+    let current = await resolveSafeUrl(initialUrl)
+    if (!current.ok) return current
+    let res: ResponseSnapshot | null = null
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      res = await fetchValidatedUrl(current.parsed, current.addresses, controller.signal)
+      if (res.status >= 300 && res.status < 400) {
+        const next = headerValue(res.headers.location)
+        if (!next) return { ok: false, error: 'redirect_no_location' }
+        const resolved = new URL(next, current.parsed).toString()
+        const safety = await resolveSafeUrl(resolved)
+        if (!safety.ok) return { ok: false, error: `redirect_${safety.error}` }
+        current = safety
+        continue
+      }
+      break
+    }
+    if (!res) return { ok: false, error: 'no_response' }
+    if (res.status < 200 || res.status >= 300) return { ok: false, error: `fetch_${res.status}` }
+    if (res.body.byteLength === 0) return { ok: false, error: 'empty_response' }
+    const slice = res.body.byteLength > MAX_HTML_BYTES ? res.body.subarray(0, MAX_HTML_BYTES) : res.body
     const html = new TextDecoder('utf-8', { fatal: false }).decode(slice)
-    const text = htmlToText(html).slice(0, MAX_TEXT_CHARS)
+    const text = htmlToText(html)
     if (text.length < 80) return { ok: false, error: 'page_blocked_or_empty' }
     return { ok: true, text }
   } catch (e) {
@@ -82,6 +75,73 @@ async function fetchPage(url: string): Promise<{ ok: true; text: string } | { ok
   } finally {
     clearTimeout(timer)
   }
+}
+
+function headerValue(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+async function fetchValidatedUrl(
+  url: URL,
+  addresses: ResolvedAddress[],
+  signal: AbortSignal,
+): Promise<ResponseSnapshot> {
+  return new Promise((resolve, reject) => {
+    const requestImpl = url.protocol === 'https:' ? httpsRequest : httpRequest
+    let index = 0
+
+    const tryRequest = () => {
+      const pinned = addresses[index]
+      if (!pinned) {
+        reject(new Error('dns_lookup_failed'))
+        return
+      }
+
+      const req = requestImpl(
+        url,
+        {
+          method: 'GET',
+          headers: {
+            'user-agent': UA,
+            accept: 'text/html,application/xhtml+xml',
+            'accept-language': 'en-US,en;q=0.9',
+          },
+          signal,
+          lookup(_hostname, _options, callback) {
+            callback(null, pinned.address, pinned.family)
+          },
+        },
+        res => {
+          const chunks: Buffer[] = []
+          res.on('data', chunk => {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+          })
+          res.on('end', () => {
+            resolve({
+              status: res.statusCode ?? 0,
+              headers: res.headers,
+              body: Buffer.concat(chunks),
+            })
+          })
+          res.on('error', reject)
+        },
+      )
+
+      req.on('error', error => {
+        index += 1
+        if (index < addresses.length) {
+          tryRequest()
+          return
+        }
+        reject(error)
+      })
+
+      req.end()
+    }
+
+    tryRequest()
+  })
 }
 
 const SYSTEM_PROMPT =
@@ -95,7 +155,10 @@ const SYSTEM_PROMPT =
   '- Use "" (empty string) for any unknown field. Do NOT guess. ' +
   'Example output: {"company":"Acme Corp","role":"Software Engineer","salary":"$120k-$150k","location":"New York, NY","workArrangement":"hybrid","source":"Greenhouse"}'
 
-async function callMinimax(url: string, text: string): Promise<{ ok: true; extracted: ExtractedFields } | { ok: false; error: string }> {
+async function callMinimax(
+  url: string,
+  text: string,
+): Promise<{ ok: true; extracted: ExtractedFields } | { ok: false; error: string }> {
   if (!process.env.MINIMAX_API_KEY) return { ok: false, error: 'missing_MINIMAX_API_KEY' }
   const modelId = process.env.MINIMAX_MODEL || 'MiniMax-M2.5'
 
@@ -118,7 +181,6 @@ async function callMinimax(url: string, text: string): Promise<{ ok: true; extra
 
   let parsed: Partial<ExtractedFields>
   try {
-    // Some models still wrap in fences even when asked not to — strip them.
     const stripped = answer
       .replace(/```(?:json)?\s*/gi, '')
       .replace(/```\s*/g, '')
@@ -154,13 +216,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ error: 'method_not_allowed' })
     return
   }
+
+  const auth = await requireAllowedUser(req)
+  if (!auth.ok) {
+    res.status(auth.status).json({ error: auth.error })
+    return
+  }
+
+  const limit = rateLimit(auth.email)
+  if (!limit.ok) {
+    res.setHeader('Retry-After', String(limit.retryAfterSec))
+    res.status(429).json({ error: 'rate_limited', retryAfterSec: limit.retryAfterSec })
+    return
+  }
+
   const url = (req.body as { url?: unknown })?.url
   if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
     res.status(400).json({ error: 'invalid_url' })
     return
   }
 
-  console.log('[extract] fetching:', url)
+  const safety = await safeUrl(url)
+  if (!safety.ok) {
+    res.status(400).json({ error: safety.error })
+    return
+  }
+
+  console.log('[extract] fetching:', url, 'for', auth.email)
   const page = await fetchPage(url)
   if (!page.ok) {
     console.error('[extract] fetch failed:', page.error)

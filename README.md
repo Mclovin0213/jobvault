@@ -51,7 +51,7 @@ bun dev
 ## What's in here
 
 - **Dashboard** — streak, applied today, total applied, pending backlog · 30-day activity chart · funnel (Applied → Interview → Offer) · burn-down · weekday heatmap · per-source bar chart · per-contributor list.
-- **Applications** — search, filter chips for status/source/tags, inline-editable rows with debounced saves, status dropdown that auto-stamps `appliedAt`.
+- **Applications** — search, filter chips for status/source/tags, **group by** (none/status/source/month-added) with collapsible sections, **sort by** (date added/applied/deadline/company) with asc/desc toggle (persisted to localStorage). Rows are compact one-liners by default and expand on click into the full inline-edit grid; status is signaled by a colored left border + badge. Status dropdown auto-stamps `appliedAt`.
 - **Kanban** — five columns, drag-drop via `@dnd-kit/core`. Dropping into "Applied" stamps `appliedAt`.
 - **Add Links** — paste any number of URLs (one per line), validates and bulk-creates pending applications.
 

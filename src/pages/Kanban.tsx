@@ -16,23 +16,8 @@ import type { Application, Status } from '@/types'
 import { STATUSES, STATUS_LABELS } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { hostnameOf } from '@/lib/urls'
+import { STATUS_COLUMN_TINT, STATUS_DOT } from '@/lib/statusColors'
 import { cn } from '@/lib/utils'
-
-const COLUMN_TINTS: Record<Status, string> = {
-  pending: 'bg-zinc-500/5 dark:bg-zinc-500/10',
-  applied: 'bg-indigo-500/5 dark:bg-indigo-500/10',
-  interview: 'bg-violet-500/5 dark:bg-violet-500/10',
-  offer: 'bg-emerald-500/5 dark:bg-emerald-500/10',
-  rejected: 'bg-rose-500/5 dark:bg-rose-500/10',
-}
-
-const COLUMN_ACCENT: Record<Status, string> = {
-  pending: 'bg-zinc-500',
-  applied: 'bg-indigo-500',
-  interview: 'bg-violet-500',
-  offer: 'bg-emerald-500',
-  rejected: 'bg-rose-500',
-}
 
 function KanbanCard({ app }: { app: Application }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -92,13 +77,13 @@ function Column({ status, apps }: { status: Status; apps: Application[] }) {
       ref={setNodeRef}
       className={cn(
         'flex h-full min-h-[400px] w-72 shrink-0 flex-col rounded-lg border border-[var(--color-border)] p-3 transition-colors',
-        COLUMN_TINTS[status],
+        STATUS_COLUMN_TINT[status],
         isOver && 'ring-2 ring-[var(--color-primary)]/50',
       )}
     >
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <span className={cn('size-2 rounded-full', COLUMN_ACCENT[status])} />
+          <span className={cn('size-2 rounded-full', STATUS_DOT[status])} />
           <span>{STATUS_LABELS[status]}</span>
         </div>
         <span className="rounded-full bg-[var(--color-background)]/60 px-2 py-0.5 text-xs font-medium tabular-nums text-[var(--color-muted-foreground)]">
@@ -134,7 +119,7 @@ function MobileTab({
         isOver && 'ring-2 ring-[var(--color-primary)]/60',
       )}
     >
-      <span className={cn('size-2 rounded-full', COLUMN_ACCENT[status])} />
+      <span className={cn('size-2 rounded-full', STATUS_DOT[status])} />
       <span>{STATUS_LABELS[status]}</span>
       <span className="rounded-full bg-[var(--color-background)]/60 px-1.5 text-[10px] tabular-nums">
         {count}
@@ -202,7 +187,7 @@ export function Kanban({ apps }: { apps: Application[] }) {
               <div
                 className={cn(
                   'min-h-[400px] rounded-lg border border-[var(--color-border)] p-3',
-                  COLUMN_TINTS[mobileStatus],
+                  STATUS_COLUMN_TINT[mobileStatus],
                 )}
               >
                 <ColumnBody apps={grouped[mobileStatus]} />

@@ -1,17 +1,63 @@
-import { useMemo, useState } from 'react'
-import { Inbox, Search } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp, ChevronRight, Inbox, Search } from 'lucide-react'
 import type { Application, Status } from '@/types'
 import { STATUSES, STATUS_LABELS } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ApplicationRow } from '@/components/ApplicationRow'
+import {
+  defaultSortDir,
+  groupApps,
+  parseGroupBy,
+  parseSortBy,
+  parseSortDir,
+  sortApps,
+  type GroupBy,
+  type SortBy,
+  type SortDir,
+} from '@/lib/applicationsView'
+import { STATUS_DOT } from '@/lib/statusColors'
 import { cn } from '@/lib/utils'
+
+const LS_GROUP_BY = 'applications.groupBy'
+const LS_SORT_BY = 'applications.sortBy'
+const LS_SORT_DIR = 'applications.sortDir'
 
 export function Applications({ apps, loading }: { apps: Application[]; loading: boolean }) {
   const [search, setSearch] = useState('')
   const [activeStatuses, setActiveStatuses] = useState<Set<Status>>(new Set())
   const [activeSources, setActiveSources] = useState<Set<string>>(new Set())
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
+
+  const [groupBy, setGroupBy] = useState<GroupBy>(() =>
+    parseGroupBy(typeof localStorage !== 'undefined' ? localStorage.getItem(LS_GROUP_BY) : null),
+  )
+  const [sortBy, setSortBy] = useState<SortBy>(() =>
+    parseSortBy(typeof localStorage !== 'undefined' ? localStorage.getItem(LS_SORT_BY) : null),
+  )
+  const [sortDir, setSortDir] = useState<SortDir>(() =>
+    parseSortDir(typeof localStorage !== 'undefined' ? localStorage.getItem(LS_SORT_DIR) : null),
+  )
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    localStorage.setItem(LS_GROUP_BY, groupBy)
+  }, [groupBy])
+  useEffect(() => {
+    localStorage.setItem(LS_SORT_BY, sortBy)
+  }, [sortBy])
+  useEffect(() => {
+    localStorage.setItem(LS_SORT_DIR, sortDir)
+  }, [sortDir])
 
   const allSources = useMemo(() => {
     const s = new Set<string>()
@@ -39,11 +85,39 @@ export function Applications({ apps, loading }: { apps: Application[]; loading: 
     })
   }, [apps, search, activeStatuses, activeSources, activeTags])
 
+  const groups = useMemo(
+    () => groupApps(sortApps(filtered, sortBy, sortDir), groupBy),
+    [filtered, sortBy, sortDir, groupBy],
+  )
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
   function toggle<T>(set: Set<T>, value: T, setter: (v: Set<T>) => void) {
     const next = new Set(set)
     if (next.has(value)) next.delete(value)
     else next.add(value)
     setter(next)
+  }
+
+  function handleSortByChange(v: SortBy) {
+    setSortBy(v)
+    setSortDir(defaultSortDir(v))
   }
 
   return (
@@ -55,6 +129,51 @@ export function Applications({ apps, loading }: { apps: Application[]; loading: 
             {filtered.length}/{apps.length}
           </span>
         </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
+              Group by
+            </span>
+            <Select value={groupBy} onValueChange={v => setGroupBy(v as GroupBy)}>
+              <SelectTrigger className="h-8 w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+                <SelectItem value="source">Source</SelectItem>
+                <SelectItem value="month">Month added</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
+              Sort by
+            </span>
+            <Select value={sortBy} onValueChange={v => handleSortByChange(v as SortBy)}>
+              <SelectTrigger className="h-8 w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="createdAt">Date added</SelectItem>
+                <SelectItem value="appliedAt">Date applied</SelectItem>
+                <SelectItem value="deadline">Deadline</SelectItem>
+                <SelectItem value="company">Company</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+              title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+            >
+              {sortDir === 'asc' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+            </Button>
+          </div>
+        </div>
+
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
           <Input
@@ -109,10 +228,50 @@ export function Applications({ apps, loading }: { apps: Application[]; loading: 
               </div>
             </div>
           ) : (
-            <div className="divide-y">
-              {filtered.map(app => (
-                <ApplicationRow key={app.id} app={app} />
-              ))}
+            <div>
+              {groups.map(g => {
+                const isCollapsed = collapsedGroups.has(g.key)
+                const showHeader = groupBy !== 'none'
+                return (
+                  <section key={g.key} className="border-b last:border-b-0">
+                    {showHeader && (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(g.key)}
+                        className="flex w-full items-center gap-2 bg-[var(--color-muted)]/40 px-3 py-2 text-left text-sm hover:bg-[var(--color-muted)]/60"
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'size-4 transition-transform text-[var(--color-muted-foreground)]',
+                            !isCollapsed && 'rotate-90',
+                          )}
+                        />
+                        {groupBy === 'status' && (
+                          <span
+                            className={cn('size-2 rounded-full', STATUS_DOT[g.key as Status])}
+                          />
+                        )}
+                        <span className="font-medium">{g.label}</span>
+                        <span className="text-xs tabular-nums text-[var(--color-muted-foreground)]">
+                          {g.items.length}
+                        </span>
+                      </button>
+                    )}
+                    {!isCollapsed && (
+                      <div className="divide-y">
+                        {g.items.map(app => (
+                          <ApplicationRow
+                            key={app.id}
+                            app={app}
+                            expanded={expandedIds.has(app.id)}
+                            onToggle={() => toggleExpanded(app.id)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
             </div>
           )}
         </CardContent>

@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
+import type { KeyboardEvent } from 'react'
 import { deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
-import { ExternalLink, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { db } from '@/firebase'
 import type { Application, Status, WorkArrangement } from '@/types'
@@ -10,6 +11,9 @@ import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/StatusBadge'
 import { hostnameOf } from '@/lib/urls'
 import { useDebouncedSaver, useReconciledDraft } from '@/lib/hooks'
+import { formatShortDate } from '@/lib/applicationsView'
+import { STATUS_BORDER } from '@/lib/statusColors'
+import { cn } from '@/lib/utils'
 import {
   Select,
   SelectContent,
@@ -118,7 +122,85 @@ async function handleStatusChange(app: Application, status: Status) {
   }
 }
 
-export function ApplicationRow({ app }: { app: Application }) {
+function CompactRow({
+  app,
+  onToggle,
+}: {
+  app: Application
+  onToggle: () => void
+}) {
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onToggle()
+    }
+  }
+  return (
+    <>
+      {/* Mobile: stacked compact */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={onKeyDown}
+        className="flex w-full cursor-pointer items-center gap-2 px-3 py-3 text-left hover:bg-[var(--color-accent)]/40 md:hidden"
+      >
+        <ChevronRight className="size-4 shrink-0 text-[var(--color-muted-foreground)]" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{app.company || 'Untitled'}</div>
+          {app.role ? (
+            <div className="truncate text-xs text-[var(--color-muted-foreground)]">{app.role}</div>
+          ) : null}
+        </div>
+        <StatusBadge status={app.status} className="text-[11px]" />
+      </div>
+
+      {/* Desktop: single line compact */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={onKeyDown}
+        className="hidden w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--color-accent)]/40 md:flex"
+      >
+        <ChevronRight className="size-4 shrink-0 text-[var(--color-muted-foreground)]" />
+        <span className="min-w-0 flex-1 truncate font-medium">{app.company || 'Untitled'}</span>
+        {app.role ? (
+          <>
+            <span className="text-[var(--color-muted-foreground)]">·</span>
+            <span className="min-w-0 max-w-[30%] truncate text-[var(--color-muted-foreground)]">
+              {app.role}
+            </span>
+          </>
+        ) : null}
+        <StatusBadge status={app.status} className="shrink-0 text-[11px]" />
+        <span className="hidden shrink-0 text-xs tabular-nums text-[var(--color-muted-foreground)] sm:inline">
+          {formatShortDate(app.createdAt)}
+        </span>
+        <a
+          href={app.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => e.stopPropagation()}
+          className="shrink-0 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+          title={app.url}
+        >
+          <ExternalLink className="size-3.5" />
+        </a>
+      </div>
+    </>
+  )
+}
+
+function ExpandedRow({
+  app,
+  onCollapse,
+}: {
+  app: Application
+  onCollapse: () => void
+}) {
   const row = useRowSaver(app.id)
 
   const handleDelete = useCallback(async () => {
@@ -131,6 +213,17 @@ export function ApplicationRow({ app }: { app: Application }) {
       toast.error(e instanceof Error ? e.message : 'Delete failed')
     }
   }, [app.id, row])
+
+  const collapseButton = (
+    <button
+      type="button"
+      onClick={onCollapse}
+      className="inline-flex size-6 items-center justify-center rounded hover:bg-[var(--color-accent)]"
+      title="Collapse"
+    >
+      <ChevronDown className="size-4 text-[var(--color-muted-foreground)]" />
+    </button>
+  )
 
   const hostLink = (
     <a
@@ -193,9 +286,12 @@ export function ApplicationRow({ app }: { app: Application }) {
   return (
     <>
       {/* Mobile: stacked card */}
-      <div className="flex flex-col gap-2 border-b px-3 py-3 md:hidden">
+      <div className="flex flex-col gap-2 px-3 py-3 md:hidden">
         <div className="flex items-center justify-between gap-2">
-          {hostLink}
+          <div className="flex items-center gap-2">
+            {collapseButton}
+            {hostLink}
+          </div>
           <div className="w-32 shrink-0">{statusSelect}</div>
         </div>
         <EditableCell
@@ -247,9 +343,12 @@ export function ApplicationRow({ app }: { app: Application }) {
         <div className="flex justify-end">{deleteButton}</div>
       </div>
 
-      {/* Desktop: existing 12-col grid */}
-      <div className="hidden grid-cols-12 gap-2 border-b px-3 py-2 hover:bg-[var(--color-accent)]/40 md:grid">
-        <div className="col-span-3 flex items-center gap-2">{hostLink}</div>
+      {/* Desktop: 12-col grid */}
+      <div className="hidden grid-cols-12 gap-2 px-3 py-2 hover:bg-[var(--color-accent)]/40 md:grid">
+        <div className="col-span-3 flex items-center gap-2">
+          {collapseButton}
+          {hostLink}
+        </div>
         <div className="col-span-2">
           <EditableCell field="company" initial={app.company} placeholder="Company" onChange={row.queue} onBlur={() => void row.flush()} />
         </div>
@@ -278,5 +377,25 @@ export function ApplicationRow({ app }: { app: Application }) {
         </div>
       </div>
     </>
+  )
+}
+
+export function ApplicationRow({
+  app,
+  expanded,
+  onToggle,
+}: {
+  app: Application
+  expanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className={cn('border-l-4', STATUS_BORDER[app.status])}>
+      {expanded ? (
+        <ExpandedRow app={app} onCollapse={onToggle} />
+      ) : (
+        <CompactRow app={app} onToggle={onToggle} />
+      )}
+    </div>
   )
 }

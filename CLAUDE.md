@@ -18,7 +18,9 @@ Private web app for Jules to dump job-application links and track applying momen
 - **One live data hook: `useApplications`** (`src/hooks/useApplications.ts`) — single `onSnapshot` ordered by `createdAt desc`. Every page consumes this; views stay in sync automatically.
 - **Auth**: `useAuth` (`src/hooks/useAuth.ts`) → Google sign-in, then checks `allowlist/{email}` doc existence. `AuthGate` (`src/components/AuthGate.tsx`) renders sign-in / not-authorized / children.
 - **Routing**: hash-based, no router lib. Tabs in `src/components/Nav.tsx`, view state in `App.tsx`.
-- **Pages** in `src/pages/`: `Dashboard`, `Applications` (search + chip filters + inline-editable rows), `Kanban` (dnd-kit), `Pending`, `AddLinks` (bulk paste).
+- **Pages** in `src/pages/`: `Dashboard`, `Applications` (search + chip filters + group/sort controls + two-tier rows: compact-by-default, click to expand into inline-edit grid), `Kanban` (dnd-kit), `Pending`, `AddLinks` (bulk paste).
+- **Status colors** are centralized in `src/lib/statusColors.ts` — `STATUS_BADGE`, `STATUS_COLUMN_TINT`, `STATUS_DOT`, `STATUS_BORDER`. `StatusBadge`, `Kanban`, and the Applications row left-border all consume from there. Don't duplicate status→Tailwind class maps; add new variants to that module.
+- **Applications view logic** (`src/lib/applicationsView.ts`) holds the pure `sortApps` / `groupApps` / `formatShortDate` helpers + parser/default helpers. The Applications page composes them as `groupApps(sortApps(filtered, sortBy, sortDir), groupBy)`. Tested in `applicationsView.test.ts`.
 - **Theme**: dark mode toggled by adding `.dark` to `<html>`, persisted to localStorage. CSS vars in `src/index.css` define both light + dark palettes. Primary accent is indigo/violet (`--primary` ≈ `oklch(... 275)`); chart palette is exposed as `--chart-1..5` (indigo / violet / cyan / emerald / amber) and mapped under `@theme inline` so charts can use `var(--color-chart-N)`.
 
 ## Conventions
@@ -26,6 +28,8 @@ Private web app for Jules to dump job-application links and track applying momen
 - `verbatimModuleSyntax` is on — every type-only import must be `import type { ... }`. The build (`tsc -b`) will fail otherwise.
 - Status changes that move to `applied` should auto-stamp `appliedAt: serverTimestamp()` if it's not already set. Both `ApplicationRow.tsx` and `Kanban.tsx` enforce this — keep the rule centralized in your head when touching either.
 - Inline edits use a 500ms debounced `updateDoc`. New editable fields should follow the `EditableCell` pattern in `ApplicationRow.tsx` (don't sync prop → state in a `useEffect`; rely on `key={app.id}` for row remount).
+- `ApplicationRow` only mounts the editing hooks (`useRowSaver`, `EditableCell`) when `expanded === true`. `useDebouncedSaver` auto-flushes pending writes on unmount, so collapsing a row commits in-flight edits without an explicit flush call. Don't move the saver up into the always-mounted wrapper.
+- Applications page user prefs (`groupBy`, `sortBy`, `sortDir`) persist to localStorage under `applications.*` keys; row-expansion and group-collapse state are intentionally session-only.
 - Bulk Firestore writes use `writeBatch` chunked at 400 ops (Firestore limit is 500).
 - Toasts via `sonner` — `toast.success` / `toast.error` for any user-visible write outcome.
 - ESLint config has `react-refresh/only-export-components` disabled for `src/components/ui/**` (shadcn-style files always export both components and helpers).

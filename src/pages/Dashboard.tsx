@@ -1,3 +1,4 @@
+import { CheckCircle2, Flame, Inbox, Send } from 'lucide-react'
 import type { Application } from '@/types'
 import { StatCard } from '@/components/StatCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,10 +37,12 @@ export function Dashboard({ apps }: { apps: Application[] }) {
           label="Streak"
           value={streak}
           subtitle={streak === 1 ? 'day in a row' : 'days in a row'}
+          icon={<Flame />}
+          accent
         />
-        <StatCard label="Applied today" value={today} />
-        <StatCard label="Total applied" value={applied} />
-        <StatCard label="Pending backlog" value={backlog} />
+        <StatCard label="Applied today" value={today} icon={<Send />} />
+        <StatCard label="Total applied" value={applied} icon={<CheckCircle2 />} />
+        <StatCard label="Pending backlog" value={backlog} icon={<Inbox />} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

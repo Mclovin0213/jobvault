@@ -18,8 +18,8 @@ Private web app for Jules to dump job-application links and track applying momen
 - **One live data hook: `useApplications`** (`src/hooks/useApplications.ts`) — single `onSnapshot` ordered by `createdAt desc`. Every page consumes this; views stay in sync automatically.
 - **Auth**: `useAuth` (`src/hooks/useAuth.ts`) → Google sign-in, then checks `allowlist/{email}` doc existence. `AuthGate` (`src/components/AuthGate.tsx`) renders sign-in / not-authorized / children.
 - **Routing**: hash-based, no router lib. Tabs in `src/components/Nav.tsx`, view state in `App.tsx`.
-- **Pages** in `src/pages/`: `Dashboard`, `Applications` (search + chip filters + inline-editable rows), `Kanban` (dnd-kit), `AddLinks` (bulk paste).
-- **Theme**: dark mode toggled by adding `.dark` to `<html>`, persisted to localStorage. CSS vars in `src/index.css` define both light + dark palettes.
+- **Pages** in `src/pages/`: `Dashboard`, `Applications` (search + chip filters + inline-editable rows), `Kanban` (dnd-kit), `Pending`, `AddLinks` (bulk paste).
+- **Theme**: dark mode toggled by adding `.dark` to `<html>`, persisted to localStorage. CSS vars in `src/index.css` define both light + dark palettes. Primary accent is indigo/violet (`--primary` ≈ `oklch(... 275)`); chart palette is exposed as `--chart-1..5` (indigo / violet / cyan / emerald / amber) and mapped under `@theme inline` so charts can use `var(--color-chart-N)`.
 
 ## Conventions
 
@@ -29,6 +29,7 @@ Private web app for Jules to dump job-application links and track applying momen
 - Bulk Firestore writes use `writeBatch` chunked at 400 ops (Firestore limit is 500).
 - Toasts via `sonner` — `toast.success` / `toast.error` for any user-visible write outcome.
 - ESLint config has `react-refresh/only-export-components` disabled for `src/components/ui/**` (shadcn-style files always export both components and helpers).
+- Charts and themed UI should pull color from the `--color-chart-1..5` / `--color-primary` tokens, not hard-coded `oklch(...)` literals — keeps light/dark and any future palette change centralized in `src/index.css`.
 
 ## Firebase setup (also in README)
 
@@ -39,7 +40,7 @@ Private web app for Jules to dump job-application links and track applying momen
 
 ## Don'ts
 
-- Don't add a router lib — hash routing is intentional, this is a 4-tab app
+- Don't add a router lib — hash routing is intentional, this is a 5-tab app
 - Don't store precomputed stats in Firestore — recompute client-side from the live snapshot
 - Don't run the dev server in agent commands without a real `.env.local` — Firebase init will throw
 - Don't use enums, namespaces, or `import` (without `type`) for type-only symbols (TS6 will reject)

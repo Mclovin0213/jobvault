@@ -188,126 +188,187 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
     await reject(p.id)
   }, [p.id, saver])
 
+  const hostLink = (
+    <a
+      href={p.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex max-w-full items-center gap-1 truncate text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+      title={p.url}
+    >
+      <span className="truncate">{p.hostname || p.url}</span>
+      <ExternalLink className="size-3 shrink-0" />
+    </a>
+  )
+
+  const workArrangementSelect = (
+    <Select
+      value={p.extracted.workArrangement || '__none__'}
+      onValueChange={v => {
+        const next = (v === '__none__' ? '' : v) as WorkArrangement
+        queue('workArrangement', next)
+        void saver.flush()
+      }}
+    >
+      <SelectTrigger className="h-9">
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__none__">—</SelectItem>
+        {WORK_ARRANGEMENTS.filter(Boolean).map(wa => (
+          <SelectItem key={wa} value={wa}>
+            {wa}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
+  const actionButtons = (
+    <>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Re-extract"
+        disabled={busy !== null || p.extraction === 'loading'}
+        onClick={async () => {
+          setBusy('reextract')
+          await reextract()
+          setBusy(null)
+        }}
+      >
+        <RefreshCw className={cn('size-4', busy === 'reextract' && 'animate-spin')} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Approve"
+        disabled={busy !== null}
+        onClick={async () => {
+          setBusy('approve')
+          await approve()
+          setBusy(null)
+        }}
+      >
+        <Check className="size-4 text-[var(--color-primary)]" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Reject"
+        disabled={busy !== null}
+        onClick={() => void handleReject()}
+      >
+        <Trash2 className="size-4 text-[var(--color-destructive)]" />
+      </Button>
+    </>
+  )
+
+  const errorBlock =
+    p.extraction === 'error' && p.extractError ? (
+      <div className="text-[11px] text-[var(--color-destructive)]">{p.extractError}</div>
+    ) : null
+
   return (
-    <div className="grid grid-cols-12 gap-2 border-b px-3 py-3 hover:bg-[var(--color-accent)]/40">
-      <div className="col-span-12 flex items-center gap-2 md:col-span-3">
-        <a
-          href={p.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex max-w-full items-center gap-1 truncate text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-          title={p.url}
-        >
-          <span className="truncate">{p.hostname || p.url}</span>
-          <ExternalLink className="size-3 shrink-0" />
-        </a>
-        <StatusPill p={p} />
-      </div>
-      <div className="col-span-6 md:col-span-2">
+    <>
+      {/* Mobile: stacked card */}
+      <div className="flex flex-col gap-2 border-b px-3 py-3 md:hidden">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">{hostLink}</div>
+          <StatusPill p={p} />
+        </div>
         <ExtractedCell
           remote={p.extracted.company}
           placeholder="Company"
           onChange={v => queue('company', v)}
           onBlur={() => void saver.flush()}
         />
-      </div>
-      <div className="col-span-6 md:col-span-2">
         <ExtractedCell
           remote={p.extracted.role}
           placeholder="Role"
           onChange={v => queue('role', v)}
           onBlur={() => void saver.flush()}
         />
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <ExtractedCell
-          remote={p.extracted.salary}
-          placeholder="$"
-          onChange={v => queue('salary', v)}
-          onBlur={() => void saver.flush()}
-        />
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <ExtractedCell
-          remote={p.extracted.location}
-          placeholder="Loc"
-          onChange={v => queue('location', v)}
-          onBlur={() => void saver.flush()}
-        />
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <Select
-          value={p.extracted.workArrangement || '__none__'}
-          onValueChange={v => {
-            const next = (v === '__none__' ? '' : v) as WorkArrangement
-            queue('workArrangement', next)
-            void saver.flush()
-          }}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">—</SelectItem>
-            {WORK_ARRANGEMENTS.filter(Boolean).map(wa => (
-              <SelectItem key={wa} value={wa}>
-                {wa}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <ExtractedCell
-          remote={p.extracted.source}
-          placeholder="Source"
-          onChange={v => queue('source', v)}
-          onBlur={() => void saver.flush()}
-        />
-      </div>
-      <div className="col-span-12 flex items-center justify-end gap-1 md:col-span-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Re-extract"
-          disabled={busy !== null || p.extraction === 'loading'}
-          onClick={async () => {
-            setBusy('reextract')
-            await reextract()
-            setBusy(null)
-          }}
-        >
-          <RefreshCw className={cn('size-4', busy === 'reextract' && 'animate-spin')} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Approve"
-          disabled={busy !== null}
-          onClick={async () => {
-            setBusy('approve')
-            await approve()
-            setBusy(null)
-          }}
-        >
-          <Check className="size-4 text-[var(--color-primary)]" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Reject"
-          disabled={busy !== null}
-          onClick={() => void handleReject()}
-        >
-          <Trash2 className="size-4 text-[var(--color-destructive)]" />
-        </Button>
-      </div>
-      {p.extraction === 'error' && p.extractError ? (
-        <div className="col-span-12 text-[11px] text-[var(--color-destructive)]">
-          {p.extractError}
+        <div className="grid grid-cols-2 gap-2">
+          <ExtractedCell
+            remote={p.extracted.salary}
+            placeholder="Salary"
+            onChange={v => queue('salary', v)}
+            onBlur={() => void saver.flush()}
+          />
+          <ExtractedCell
+            remote={p.extracted.location}
+            placeholder="Location"
+            onChange={v => queue('location', v)}
+            onBlur={() => void saver.flush()}
+          />
+          {workArrangementSelect}
+          <ExtractedCell
+            remote={p.extracted.source}
+            placeholder="Source"
+            onChange={v => queue('source', v)}
+            onBlur={() => void saver.flush()}
+          />
         </div>
-      ) : null}
-    </div>
+        {errorBlock}
+        <div className="flex justify-end gap-1">{actionButtons}</div>
+      </div>
+
+      {/* Desktop: existing 12-col grid */}
+      <div className="hidden grid-cols-12 gap-2 border-b px-3 py-3 hover:bg-[var(--color-accent)]/40 md:grid">
+        <div className="col-span-3 flex items-center gap-2">
+          {hostLink}
+          <StatusPill p={p} />
+        </div>
+        <div className="col-span-2">
+          <ExtractedCell
+            remote={p.extracted.company}
+            placeholder="Company"
+            onChange={v => queue('company', v)}
+            onBlur={() => void saver.flush()}
+          />
+        </div>
+        <div className="col-span-2">
+          <ExtractedCell
+            remote={p.extracted.role}
+            placeholder="Role"
+            onChange={v => queue('role', v)}
+            onBlur={() => void saver.flush()}
+          />
+        </div>
+        <div className="col-span-1">
+          <ExtractedCell
+            remote={p.extracted.salary}
+            placeholder="$"
+            onChange={v => queue('salary', v)}
+            onBlur={() => void saver.flush()}
+          />
+        </div>
+        <div className="col-span-1">
+          <ExtractedCell
+            remote={p.extracted.location}
+            placeholder="Loc"
+            onChange={v => queue('location', v)}
+            onBlur={() => void saver.flush()}
+          />
+        </div>
+        <div className="col-span-1">{workArrangementSelect}</div>
+        <div className="col-span-1">
+          <ExtractedCell
+            remote={p.extracted.source}
+            placeholder="Source"
+            onChange={v => queue('source', v)}
+            onBlur={() => void saver.flush()}
+          />
+        </div>
+        <div className="col-span-1 flex items-center justify-end gap-1">{actionButtons}</div>
+        {p.extraction === 'error' && p.extractError ? (
+          <div className="col-span-12 text-[11px] text-[var(--color-destructive)]">
+            {p.extractError}
+          </div>
+        ) : null}
+      </div>
+    </>
   )
 }
 

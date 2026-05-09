@@ -132,90 +132,151 @@ export function ApplicationRow({ app }: { app: Application }) {
     }
   }, [app.id, row])
 
+  const hostLink = (
+    <a
+      href={app.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+      title={app.url}
+    >
+      {hostnameOf(app.url)}
+      <ExternalLink className="size-3" />
+    </a>
+  )
+
+  const statusSelect = (
+    <Select value={app.status} onValueChange={v => void handleStatusChange(app, v as Status)}>
+      <SelectTrigger className="h-9">
+        <SelectValue>
+          <StatusBadge status={app.status} className="text-[11px]" />
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {STATUSES.map(s => (
+          <SelectItem key={s} value={s}>
+            {STATUS_LABELS[s]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
+  const workArrangementSelect = (
+    <Select
+      value={app.workArrangement || '__none__'}
+      onValueChange={v => {
+        const next = (v === '__none__' ? '' : v) as WorkArrangement
+        void updateDoc(doc(db, 'applications', app.id), { workArrangement: next })
+      }}
+    >
+      <SelectTrigger className="h-9">
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__none__">—</SelectItem>
+        {WORK_ARRANGEMENTS.filter(Boolean).map(wa => (
+          <SelectItem key={wa} value={wa}>
+            {wa}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
+  const deleteButton = (
+    <Button variant="ghost" size="icon" onClick={() => void handleDelete()} title="Delete">
+      <Trash2 className="size-4 text-[var(--color-destructive)]" />
+    </Button>
+  )
+
   return (
-    <div className="grid grid-cols-12 gap-2 border-b px-3 py-2 hover:bg-[var(--color-accent)]/40">
-      <div className="col-span-12 flex items-center gap-2 md:col-span-3">
-        <a
-          href={app.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-          title={app.url}
-        >
-          {hostnameOf(app.url)}
-          <ExternalLink className="size-3" />
-        </a>
-      </div>
-      <div className="col-span-6 md:col-span-2">
-        <EditableCell field="company" initial={app.company} placeholder="Company" onChange={row.queue} onBlur={() => void row.flush()} />
-      </div>
-      <div className="col-span-6 md:col-span-2">
-        <EditableCell field="role" initial={app.role} placeholder="Role" onChange={row.queue} onBlur={() => void row.flush()} />
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <EditableCell field="salary" initial={app.salary} placeholder="$" onChange={row.queue} onBlur={() => void row.flush()} />
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <EditableCell field="location" initial={app.location} placeholder="Loc" onChange={row.queue} onBlur={() => void row.flush()} />
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <Select
-          value={app.workArrangement || '__none__'}
-          onValueChange={v => {
-            const next = (v === '__none__' ? '' : v) as WorkArrangement
-            void updateDoc(doc(db, 'applications', app.id), { workArrangement: next })
-          }}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">—</SelectItem>
-            {WORK_ARRANGEMENTS.filter(Boolean).map(wa => (
-              <SelectItem key={wa} value={wa}>
-                {wa}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="col-span-6 md:col-span-1">
-        <EditableCell field="source" initial={app.source} placeholder="Source" onChange={row.queue} onBlur={() => void row.flush()} />
-      </div>
-      <div className="col-span-12 md:col-span-1">
-        <Select value={app.status} onValueChange={v => void handleStatusChange(app, v as Status)}>
-          <SelectTrigger className="h-9">
-            <SelectValue>
-              <StatusBadge status={app.status} className="text-[11px]" />
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {STATUSES.map(s => (
-              <SelectItem key={s} value={s}>
-                {STATUS_LABELS[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="col-span-12 grid grid-cols-12 gap-2 md:col-span-12 md:pl-[25%]">
-        <div className="col-span-6">
-          <TagsCell tags={app.tags} onChange={row.queue} onBlur={() => void row.flush()} />
+    <>
+      {/* Mobile: stacked card */}
+      <div className="flex flex-col gap-2 border-b px-3 py-3 md:hidden">
+        <div className="flex items-center justify-between gap-2">
+          {hostLink}
+          <div className="w-32 shrink-0">{statusSelect}</div>
         </div>
-        <div className="col-span-5">
-          <EditableCell field="notes" initial={app.notes} placeholder="Notes" onChange={row.queue} onBlur={() => void row.flush()} />
+        <EditableCell
+          field="company"
+          initial={app.company}
+          placeholder="Company"
+          onChange={row.queue}
+          onBlur={() => void row.flush()}
+        />
+        <EditableCell
+          field="role"
+          initial={app.role}
+          placeholder="Role"
+          onChange={row.queue}
+          onBlur={() => void row.flush()}
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <EditableCell
+            field="salary"
+            initial={app.salary}
+            placeholder="Salary"
+            onChange={row.queue}
+            onBlur={() => void row.flush()}
+          />
+          <EditableCell
+            field="location"
+            initial={app.location}
+            placeholder="Location"
+            onChange={row.queue}
+            onBlur={() => void row.flush()}
+          />
+          {workArrangementSelect}
+          <EditableCell
+            field="source"
+            initial={app.source}
+            placeholder="Source"
+            onChange={row.queue}
+            onBlur={() => void row.flush()}
+          />
         </div>
-        <div className="col-span-1 flex items-center justify-end">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => void handleDelete()}
-            title="Delete"
-          >
-            <Trash2 className="size-4 text-[var(--color-destructive)]" />
-          </Button>
+        <TagsCell tags={app.tags} onChange={row.queue} onBlur={() => void row.flush()} />
+        <EditableCell
+          field="notes"
+          initial={app.notes}
+          placeholder="Notes"
+          onChange={row.queue}
+          onBlur={() => void row.flush()}
+        />
+        <div className="flex justify-end">{deleteButton}</div>
+      </div>
+
+      {/* Desktop: existing 12-col grid */}
+      <div className="hidden grid-cols-12 gap-2 border-b px-3 py-2 hover:bg-[var(--color-accent)]/40 md:grid">
+        <div className="col-span-3 flex items-center gap-2">{hostLink}</div>
+        <div className="col-span-2">
+          <EditableCell field="company" initial={app.company} placeholder="Company" onChange={row.queue} onBlur={() => void row.flush()} />
+        </div>
+        <div className="col-span-2">
+          <EditableCell field="role" initial={app.role} placeholder="Role" onChange={row.queue} onBlur={() => void row.flush()} />
+        </div>
+        <div className="col-span-1">
+          <EditableCell field="salary" initial={app.salary} placeholder="$" onChange={row.queue} onBlur={() => void row.flush()} />
+        </div>
+        <div className="col-span-1">
+          <EditableCell field="location" initial={app.location} placeholder="Loc" onChange={row.queue} onBlur={() => void row.flush()} />
+        </div>
+        <div className="col-span-1">{workArrangementSelect}</div>
+        <div className="col-span-1">
+          <EditableCell field="source" initial={app.source} placeholder="Source" onChange={row.queue} onBlur={() => void row.flush()} />
+        </div>
+        <div className="col-span-1">{statusSelect}</div>
+        <div className="col-span-12 grid grid-cols-12 gap-2 pl-[25%]">
+          <div className="col-span-6">
+            <TagsCell tags={app.tags} onChange={row.queue} onBlur={() => void row.flush()} />
+          </div>
+          <div className="col-span-5">
+            <EditableCell field="notes" initial={app.notes} placeholder="Notes" onChange={row.queue} onBlur={() => void row.flush()} />
+          </div>
+          <div className="col-span-1 flex items-center justify-end">{deleteButton}</div>
         </div>
       </div>
-    </div>
+    </>
   )
 }

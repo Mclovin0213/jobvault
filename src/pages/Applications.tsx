@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Inbox, Search } from 'lucide-react'
 import type { Application, Status } from '@/types'
 import { STATUSES, STATUS_LABELS } from '@/types'
 import { Input } from '@/components/ui/input'
@@ -98,10 +98,15 @@ export function Applications({ apps, loading }: { apps: Application[]; loading: 
               Loading…
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-10 text-center text-sm text-[var(--color-muted-foreground)]">
-              {apps.length === 0
-                ? 'No applications yet. Head to Add Links to paste some URLs.'
-                : 'No matches for your filters.'}
+            <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+              <div className="inline-flex size-12 items-center justify-center rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] ring-1 ring-inset ring-[var(--color-primary)]/20">
+                <Inbox className="size-5" />
+              </div>
+              <div className="text-sm text-[var(--color-muted-foreground)]">
+                {apps.length === 0
+                  ? 'No applications yet. Head to Add Links to paste some URLs.'
+                  : 'No matches for your filters.'}
+              </div>
             </div>
           ) : (
             <div className="divide-y">

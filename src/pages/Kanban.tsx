@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   DndContext,
   PointerSensor,
@@ -19,11 +19,19 @@ import { hostnameOf } from '@/lib/urls'
 import { cn } from '@/lib/utils'
 
 const COLUMN_TINTS: Record<Status, string> = {
-  pending: 'bg-zinc-50 dark:bg-zinc-900/50',
-  applied: 'bg-blue-50 dark:bg-blue-950/30',
-  interview: 'bg-emerald-50 dark:bg-emerald-950/30',
-  offer: 'bg-teal-50 dark:bg-teal-950/30',
-  rejected: 'bg-rose-50 dark:bg-rose-950/30',
+  pending: 'bg-zinc-500/5 dark:bg-zinc-500/10',
+  applied: 'bg-indigo-500/5 dark:bg-indigo-500/10',
+  interview: 'bg-violet-500/5 dark:bg-violet-500/10',
+  offer: 'bg-emerald-500/5 dark:bg-emerald-500/10',
+  rejected: 'bg-rose-500/5 dark:bg-rose-500/10',
+}
+
+const COLUMN_ACCENT: Record<Status, string> = {
+  pending: 'bg-zinc-500',
+  applied: 'bg-indigo-500',
+  interview: 'bg-violet-500',
+  offer: 'bg-emerald-500',
+  rejected: 'bg-rose-500',
 }
 
 function KanbanCard({ app }: { app: Application }) {
@@ -40,8 +48,8 @@ function KanbanCard({ app }: { app: Application }) {
       {...attributes}
       {...listeners}
       className={cn(
-        'cursor-grab rounded-md border bg-[var(--color-card)] p-3 text-sm shadow-sm transition-shadow hover:shadow-md',
-        isDragging && 'opacity-50 shadow-lg',
+        'cursor-grab rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-3 text-sm shadow-sm transition-all hover:border-[var(--color-primary)]/40 hover:shadow-[0_8px_20px_-8px_oklch(0.55_0.22_275/0.35)]',
+        isDragging && 'opacity-50 shadow-lg ring-2 ring-[var(--color-primary)]/40',
       )}
     >
       <div className="font-medium">{app.company || 'Untitled'}</div>
@@ -62,37 +70,82 @@ function KanbanCard({ app }: { app: Application }) {
   )
 }
 
+function ColumnBody({ apps }: { apps: Application[] }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {apps.map(a => (
+        <KanbanCard key={a.id} app={a} />
+      ))}
+      {apps.length === 0 ? (
+        <div className="rounded-md border border-dashed p-3 text-center text-xs text-[var(--color-muted-foreground)]">
+          Drop here
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function Column({ status, apps }: { status: Status; apps: Application[] }) {
   const { isOver, setNodeRef } = useDroppable({ id: status })
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        'flex h-full min-h-[400px] w-72 shrink-0 flex-col rounded-lg border p-3 transition-colors',
+        'flex h-full min-h-[400px] w-72 shrink-0 flex-col rounded-lg border border-[var(--color-border)] p-3 transition-colors',
         COLUMN_TINTS[status],
-        isOver && 'ring-2 ring-[var(--color-ring)]',
+        isOver && 'ring-2 ring-[var(--color-primary)]/50',
       )}
     >
-      <div className="mb-2 flex items-center justify-between text-sm font-medium">
-        <span>{STATUS_LABELS[status]}</span>
-        <span className="text-xs text-[var(--color-muted-foreground)]">{apps.length}</span>
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <span className={cn('size-2 rounded-full', COLUMN_ACCENT[status])} />
+          <span>{STATUS_LABELS[status]}</span>
+        </div>
+        <span className="rounded-full bg-[var(--color-background)]/60 px-2 py-0.5 text-xs font-medium tabular-nums text-[var(--color-muted-foreground)]">
+          {apps.length}
+        </span>
       </div>
-      <div className="flex flex-col gap-2">
-        {apps.map(a => (
-          <KanbanCard key={a.id} app={a} />
-        ))}
-        {apps.length === 0 ? (
-          <div className="rounded-md border border-dashed p-3 text-center text-xs text-[var(--color-muted-foreground)]">
-            Drop here
-          </div>
-        ) : null}
-      </div>
+      <ColumnBody apps={apps} />
     </div>
+  )
+}
+
+function MobileTab({
+  status,
+  count,
+  active,
+  onSelect,
+}: {
+  status: Status
+  count: number
+  active: boolean
+  onSelect: () => void
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: status })
+  return (
+    <button
+      ref={setNodeRef}
+      onClick={onSelect}
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
+        active
+          ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/15 text-[var(--color-primary)]'
+          : 'border-[var(--color-border)] text-[var(--color-muted-foreground)]',
+        isOver && 'ring-2 ring-[var(--color-primary)]/60',
+      )}
+    >
+      <span className={cn('size-2 rounded-full', COLUMN_ACCENT[status])} />
+      <span>{STATUS_LABELS[status]}</span>
+      <span className="rounded-full bg-[var(--color-background)]/60 px-1.5 text-[10px] tabular-nums">
+        {count}
+      </span>
+    </button>
   )
 }
 
 export function Kanban({ apps }: { apps: Application[] }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const [mobileStatus, setMobileStatus] = useState<Status>('pending')
   const grouped = useMemo(() => {
     const g: Record<Status, Application[]> = {
       pending: [],
@@ -129,10 +182,34 @@ export function Kanban({ apps }: { apps: Application[] }) {
       <Card>
         <CardContent className="p-3">
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="hidden gap-3 overflow-x-auto pb-2 md:flex">
               {STATUSES.map(s => (
                 <Column key={s} status={s} apps={grouped[s]} />
               ))}
+            </div>
+            <div className="md:hidden">
+              <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {STATUSES.map(s => (
+                  <MobileTab
+                    key={s}
+                    status={s}
+                    count={grouped[s].length}
+                    active={mobileStatus === s}
+                    onSelect={() => setMobileStatus(s)}
+                  />
+                ))}
+              </div>
+              <div
+                className={cn(
+                  'min-h-[400px] rounded-lg border border-[var(--color-border)] p-3',
+                  COLUMN_TINTS[mobileStatus],
+                )}
+              >
+                <ColumnBody apps={grouped[mobileStatus]} />
+              </div>
+              <p className="mt-2 text-center text-[11px] text-[var(--color-muted-foreground)]">
+                Drag a card onto a status pill to move it.
+              </p>
             </div>
           </DndContext>
         </CardContent>

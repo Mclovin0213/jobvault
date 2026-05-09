@@ -26,18 +26,33 @@ const tooltipStyle = {
   borderRadius: 8,
   fontSize: 12,
   color: 'var(--color-popover-foreground)',
+  boxShadow: '0 8px 24px -8px oklch(0 0 0 / 0.4)',
 }
+
+const CHART_PALETTE = [
+  'var(--color-chart-1)',
+  'var(--color-chart-2)',
+  'var(--color-chart-3)',
+  'var(--color-chart-4)',
+  'var(--color-chart-5)',
+]
 
 export function ActivityChart({ apps }: { apps: Application[] }) {
   const data = dailyCounts(apps, 30)
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+        <defs>
+          <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.95} />
+            <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0.35} />
+          </linearGradient>
+        </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
         <XAxis dataKey="date" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
         <YAxis allowDecimals={false} stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-accent)', opacity: 0.3 }} />
-        <Bar dataKey="count" fill="oklch(0.6 0.2 260)" radius={[4, 4, 0, 0]} />
+        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-primary)', opacity: 0.08 }} />
+        <Bar dataKey="count" fill="url(#activityFill)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -50,9 +65,13 @@ export function FunnelChart({ apps }: { apps: Application[] }) {
       <BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
         <XAxis type="number" allowDecimals={false} stroke="var(--color-muted-foreground)" fontSize={11} />
-        <YAxis dataKey="stage" type="category" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={80} />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-accent)', opacity: 0.3 }} />
-        <Bar dataKey="count" fill="oklch(0.7 0.16 160)" radius={[0, 4, 4, 0]} />
+        <YAxis dataKey="stage" type="category" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} width={56} />
+        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-primary)', opacity: 0.08 }} />
+        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+          {data.map((_, i) => (
+            <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   )
@@ -67,7 +86,14 @@ export function BacklogChart({ apps }: { apps: Application[] }) {
         <XAxis dataKey="date" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
         <YAxis allowDecimals={false} stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
         <Tooltip contentStyle={tooltipStyle} />
-        <Line type="monotone" dataKey="backlog" stroke="oklch(0.7 0.18 50)" strokeWidth={2} dot={false} />
+        <Line
+          type="monotone"
+          dataKey="backlog"
+          stroke="var(--color-chart-5)"
+          strokeWidth={2.5}
+          dot={false}
+          activeDot={{ r: 4, fill: 'var(--color-chart-5)', stroke: 'var(--color-background)', strokeWidth: 2 }}
+        />
       </LineChart>
     </ResponsiveContainer>
   )
@@ -77,20 +103,26 @@ export function WeekdayHeatmap({ apps }: { apps: Application[] }) {
   const data = weekdayHeatmap(apps)
   const max = Math.max(1, ...data.map(d => d.count))
   return (
-    <div className="grid grid-cols-7 gap-2">
+    <div className="grid grid-cols-7 gap-1 sm:gap-2">
       {data.map(d => {
         const intensity = d.count / max
-        const bg = `oklch(0.65 ${0.15 * intensity} 250 / ${0.2 + 0.8 * intensity})`
+        const isPeak = d.count > 0 && d.count === max
         return (
-          <div key={d.day} className="flex flex-col items-center gap-1.5">
+          <div key={d.day} className="flex flex-col items-center gap-1 sm:gap-1.5">
             <div
-              className="flex h-16 w-full items-center justify-center rounded-md border text-sm font-medium"
-              style={{ background: bg }}
+              className={
+                'flex h-12 w-full items-center justify-center rounded-md border border-[var(--color-border)] text-xs font-semibold tabular-nums transition-colors sm:h-16 sm:text-sm ' +
+                (isPeak ? 'ring-1 ring-inset ring-[var(--color-primary)]/40' : '')
+              }
+              style={{
+                background: `color-mix(in oklch, var(--color-chart-1) ${Math.round(15 + 75 * intensity)}%, transparent)`,
+                color: intensity > 0.5 ? 'oklch(0.99 0.005 265)' : 'var(--color-foreground)',
+              }}
               title={`${d.day}: ${d.count}`}
             >
               {d.count || ''}
             </div>
-            <div className="text-xs text-[var(--color-muted-foreground)]">{d.day}</div>
+            <div className="text-[10px] text-[var(--color-muted-foreground)] sm:text-xs">{d.day}</div>
           </div>
         )
       })}
@@ -107,11 +139,11 @@ export function SourceBreakdown({ apps }: { apps: Application[] }) {
     <ResponsiveContainer width="100%" height={Math.max(180, data.length * 32)}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
         <XAxis type="number" allowDecimals={false} stroke="var(--color-muted-foreground)" fontSize={11} />
-        <YAxis dataKey="source" type="category" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={100} />
-        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-accent)', opacity: 0.3 }} />
+        <YAxis dataKey="source" type="category" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} width={72} />
+        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--color-primary)', opacity: 0.08 }} />
         <Bar dataKey="total" radius={[0, 4, 4, 0]}>
           {data.map((_, i) => (
-            <Cell key={i} fill={`oklch(0.7 0.15 ${(i * 47) % 360})`} />
+            <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}
         </Bar>
       </BarChart>
@@ -129,7 +161,7 @@ export function UserBreakdown({ apps }: { apps: Application[] }) {
       {data.map(u => (
         <li
           key={u.name}
-          className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+          className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-background)]/40 px-3 py-2 text-sm transition-colors hover:border-[var(--color-primary)]/30"
         >
           <span className="font-medium">{u.name}</span>
           <span className="text-[var(--color-muted-foreground)]">

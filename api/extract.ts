@@ -108,8 +108,15 @@ async function fetchValidatedUrl(
             'accept-language': 'en-US,en;q=0.9',
           },
           signal,
-          lookup(_hostname, _options, callback) {
-            callback(null, pinned.address, pinned.family)
+          lookup(_hostname, options, callback) {
+            if (options && (options as { all?: boolean }).all) {
+              ;(callback as unknown as (err: Error | null, addresses: ResolvedAddress[]) => void)(
+                null,
+                [{ address: pinned.address, family: pinned.family }],
+              )
+            } else {
+              callback(null, pinned.address, pinned.family)
+            }
           },
         },
         res => {

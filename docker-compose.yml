@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/app/data/app.db
+      AUTH_MODE: ${AUTH_MODE:-none}
+      ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+      ALLOWLIST: ${ALLOWLIST:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+    restart: unless-stopped

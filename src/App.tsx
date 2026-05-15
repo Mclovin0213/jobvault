@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Toaster } from 'sonner'
-import type { User } from 'firebase/auth'
+import type { StoredUser } from '@/auth/adapter'
 import { useAuth } from '@/hooks/useAuth'
 import { useApplications } from '@/hooks/useApplications'
 import { usePendingUrls } from '@/hooks/usePendingUrls'
@@ -44,14 +44,14 @@ function AppShell({
   dark,
   onToggleDark,
 }: {
-  user: User
+  user: StoredUser
   onSignOut: () => void
   dark: boolean
   onToggleDark: () => void
 }) {
   const [view, setView] = useView()
-  const { apps, loading } = useApplications()
-  const { pending, loading: pendingLoading } = usePendingUrls()
+  const appsApi = useApplications()
+  const pendingApi = usePendingUrls()
   return (
     <div className="min-h-svh">
       <Nav
@@ -61,18 +61,33 @@ function AppShell({
         onSignOut={onSignOut}
         dark={dark}
         onToggleDark={onToggleDark}
-        pendingCount={pending.length}
+        pendingCount={pendingApi.pending.length}
       />
       {view === 'dashboard' ? (
-        <Dashboard apps={apps} />
+        <Dashboard apps={appsApi.apps} />
       ) : view === 'applications' ? (
-        <Applications apps={apps} loading={loading} />
+        <Applications
+          apps={appsApi.apps}
+          loading={appsApi.loading}
+          updateApp={appsApi.update}
+          removeApp={appsApi.remove}
+        />
       ) : view === 'kanban' ? (
-        <Kanban apps={apps} />
+        <Kanban apps={appsApi.apps} updateApp={appsApi.update} />
       ) : view === 'pending' ? (
-        <Pending user={user} pending={pending} loading={pendingLoading} />
+        <Pending
+          pending={pendingApi.pending}
+          loading={pendingApi.loading}
+          updatePending={pendingApi.update}
+          removePending={pendingApi.remove}
+          approvePending={pendingApi.approve}
+          appsMutate={appsApi.mutate}
+        />
       ) : (
-        <AddLinks user={user} />
+        <AddLinks
+          createPending={pendingApi.createMany}
+          updatePending={pendingApi.update}
+        />
       )}
     </div>
   )

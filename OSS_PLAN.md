@@ -157,22 +157,22 @@ Per the codebase exploration, these are **storage-agnostic** and stay nearly unt
 7. ⏳ **Not done** (Phase 3 concern): UI still writes to Firestore. Nothing user-visible has changed yet — server side is now feature-complete.
 8. ⏳ **Deferred follow-ups (small):** GitHub OAuth provider, PKCE on the OAuth flow, admin endpoints for managing the SQL `allowlist` table.
 
-### Phase 3 — Frontend cutover
-1. Rewrite `useApplications` / `usePendingUrls` against DataAdapter (polling)
-2. Rewrite `useAuth` against AuthAdapter
-3. Replace all direct Firestore writes (`ApplicationRow`, `Kanban`, `Pending`, `AddLinks`) with REST calls
-4. Run migration script against production Firestore → seed Turso
-5. Deploy to Vercel with `DATABASE_URL=libsql://...` + OAuth env vars
-6. Verify parity, then delete `src/firebase.ts`, `api/_lib/firebaseAdmin.ts`, `firestore.rules`, `firebase` from `package.json`
+### Phase 3 — Frontend cutover ✅ DONE
+1. ✅ `useApplications` / `usePendingUrls` rewritten against REST polling with optimistic per-row rollback.
+2. ✅ `useAuth` rewritten against `GET /api/auth/me`.
+3. ✅ All direct Firestore writes removed from `ApplicationRow`, `Kanban`, `Pending`, `AddLinks`.
 
-### Phase 4 — OSS readiness
-1. Add `LICENSE` (AGPL-3.0)
-2. Rewrite `README.md` — positioning ("the prettiest self-hostable application tracker, no auto-apply spam"), 30-second setup, screenshots
-3. `docs/SELF_HOSTING.md`, `docs/CONFIGURATION.md`, `docs/AI_PROVIDERS.md`
-4. Dockerfile + `docker-compose.yml` (app + volume for sqlite file)
-5. GitHub Actions: lint + test + build on PR
-6. Flip repo visibility to public
-7. (Optional) Show HN / r/selfhosted post
+### Phase 4 — OSS migration ✅ DONE (2026-05-14)
+Scope expanded mid-pass: rather than keep the Vercel deployment alive in parallel, we dropped Vercel entirely and made the repo OSS-only.
+
+1. ✅ Exported live Firestore data → `data/app.db` via `scripts/legacy/migrate-from-firebase.ts` (13 applications + 1 allowlist row). Backup at `~/jules-tracker-backup/`.
+2. ✅ Replaced `api/` (Vercel serverless) with `server/` — a single Bun + Hono process that serves `dist/` and `/api/*`. Sessions via iron-session's `sealData`/`unsealData` + `hono/cookie`. Drizzle migrations apply on boot.
+3. ✅ Deleted `api/`, `src/firebase.ts`, `firestore.rules`, `firebase.json`, `vercel.json`, `tmp.db`. Dropped `firebase`, `firebase-admin`, `@vercel/node` from `package.json`. Moved the migration script to `scripts/legacy/` with `firebase-admin` as an opt-in install.
+4. ✅ Added `LICENSE` (AGPL-3.0), rewrote `README.md` for OSS positioning, wrote `docs/{SELF_HOSTING,CONFIGURATION,AI_PROVIDERS}.md`.
+5. ✅ Dockerfile (multi-stage Bun, ~30 LOC) + `docker-compose.yml` (single service, `./data` volume, env passthrough) + `.dockerignore`.
+6. ✅ GitHub Actions CI (`.github/workflows/ci.yml`) — Bun setup, install, lint, test, build on PR + push to main.
+7. ✅ `.env.example` rewritten — Storage / Auth / AI / Server sections; Firebase variables removed entirely.
+8. ⏳ Flip repo visibility to public — operator action, not a code change.
 
 ### Phase 5 — Polish (post-launch, prioritized by feedback)
 - SSE for real-time multi-user instead of polling

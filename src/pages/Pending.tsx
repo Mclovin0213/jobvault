@@ -1,18 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  collection,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  updateDoc,
-  writeBatch,
-} from 'firebase/firestore'
 import { Check, ExternalLink, Loader2, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
-import type { User } from 'firebase/auth'
-import { db } from '@/firebase'
 import { extractUrl } from '@/lib/extract'
-import type { ExtractedFields, PendingUrl, WorkArrangement } from '@/types'
+import type { Application, ExtractedFields, PendingUrl, WorkArrangement } from '@/types'
+import type { NewApplication } from '@/storage/adapter'
 import { WORK_ARRANGEMENTS } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -26,6 +17,11 @@ import {
 } from '@/components/ui/select'
 import { useDebouncedSaver, useReconciledDraft } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
+
+type UpdatePendingFn = (id: string, patch: Partial<PendingUrl>) => Promise<void>
+type RemovePendingFn = (id: string) => Promise<void>
+type ApprovePendingFn = (id: string, app: NewApplication) => Promise<Application | null>
+type AppsMutateFn = (updater: (prev: Application[]) => Application[]) => void
 
 function StatusPill({ p }: { p: PendingUrl }) {
   if (p.extraction === 'loading') {
@@ -59,16 +55,6 @@ function StatusPill({ p }: { p: PendingUrl }) {
   )
 }
 
-async function reject(id: string) {
-  if (!confirm('Reject and discard this link?')) return
-  try {
-    await deleteDoc(doc(db, 'pendingUrls', id))
-    toast.success('Rejected')
-  } catch (e) {
-    toast.error(e instanceof Error ? e.message : 'Reject failed')
-  }
-}
-
 function ExtractedCell({
   remote,
   onChange,
@@ -98,7 +84,19 @@ function ExtractedCell({
   )
 }
 
-function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
+function PendingRow({
+  p,
+  updatePending,
+  removePending,
+  approvePending,
+  appsMutate,
+}: {
+  p: PendingUrl
+  updatePending: UpdatePendingFn
+  removePending: RemovePendingFn
+  approvePending: ApprovePendingFn
+  appsMutate: AppsMutateFn
+}) {
   const [busy, setBusy] = useState<'approve' | 'reextract' | null>(null)
   const pendingPatchRef = useRef<Partial<ExtractedFields>>({})
   const latestExtractedRef = useRef<ExtractedFields>(p.extracted)
@@ -109,13 +107,9 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
   const saver = useDebouncedSaver<Partial<ExtractedFields>>(async patch => {
     if (Object.keys(patch).length === 0) return
     pendingPatchRef.current = {}
-    const update: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(patch)) update[`extracted.${k}`] = v
-    try {
-      await updateDoc(doc(db, 'pendingUrls', p.id), update)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Save failed')
-    }
+    const next: ExtractedFields = { ...latestExtractedRef.current, ...patch }
+    latestExtractedRef.current = next
+    await updatePending(p.id, { extracted: next })
   })
 
   const queue = useCallback(
@@ -131,9 +125,7 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
     await saver.flush()
     const draft: ExtractedFields = latestExtractedRef.current
     pendingPatchRef.current = {}
-    const batch = writeBatch(db)
-    const newRef = doc(collection(db, 'applications'))
-    batch.set(newRef, {
+    const payload: NewApplication = {
       url: p.url,
       company: draft.company ?? '',
       role: draft.role ?? '',
@@ -147,46 +139,44 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
       deadline: null,
       followUpDate: null,
       appliedAt: null,
-      createdAt: serverTimestamp(),
-      addedBy: p.addedBy || user.uid,
-      addedByName: p.addedByName || (user.displayName ?? user.email ?? 'Unknown'),
-    })
-    batch.delete(doc(db, 'pendingUrls', p.id))
-    try {
-      await batch.commit()
-      toast.success('Approved → moved to Applications')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Approve failed')
+      addedBy: p.addedBy,
+      addedByName: p.addedByName,
     }
-  }, [p, user, saver])
+    const created = await approvePending(p.id, payload)
+    if (created) {
+      appsMutate(prev => [created, ...prev.filter(a => a.id !== created.id)])
+      toast.success('Approved → moved to Applications')
+    }
+  }, [p, saver, approvePending, appsMutate])
 
   const reextract = useCallback(async () => {
     await saver.flush()
-    const ref = doc(db, 'pendingUrls', p.id)
-    await updateDoc(ref, { extraction: 'loading', extractError: '' }).catch(() => {})
+    await updatePending(p.id, { extraction: 'loading', extractError: '' })
     const result = await extractUrl(p.url)
     if (result.ok) {
       latestExtractedRef.current = result.extracted
       pendingPatchRef.current = {}
-      await updateDoc(ref, {
+      await updatePending(p.id, {
         extraction: 'done',
         extracted: result.extracted,
         extractError: '',
-      }).catch(e => toast.error(e instanceof Error ? e.message : 'Save failed'))
+      })
     } else {
-      await updateDoc(ref, {
+      await updatePending(p.id, {
         extraction: 'error',
         extractError: result.error,
-      }).catch(() => {})
+      })
       toast.error(`Extract failed: ${result.error}`)
     }
-  }, [p.id, p.url, saver])
+  }, [p.id, p.url, saver, updatePending])
 
   const handleReject = useCallback(async () => {
+    if (!confirm('Reject and discard this link?')) return
     await saver.cancel()
     pendingPatchRef.current = {}
-    await reject(p.id)
-  }, [p.id, saver])
+    await removePending(p.id)
+    toast.success('Rejected')
+  }, [p.id, saver, removePending])
 
   const hostLink = (
     <a
@@ -373,13 +363,19 @@ function PendingRow({ p, user }: { p: PendingUrl; user: User }) {
 }
 
 export function Pending({
-  user,
   pending,
   loading,
+  updatePending,
+  removePending,
+  approvePending,
+  appsMutate,
 }: {
-  user: User
   pending: PendingUrl[]
   loading: boolean
+  updatePending: UpdatePendingFn
+  removePending: RemovePendingFn
+  approvePending: ApprovePendingFn
+  appsMutate: AppsMutateFn
 }) {
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 md:p-6">
@@ -405,7 +401,14 @@ export function Pending({
           ) : (
             <div className="divide-y">
               {pending.map(p => (
-                <PendingRow key={p.id} p={p} user={user} />
+                <PendingRow
+                  key={p.id}
+                  p={p}
+                  updatePending={updatePending}
+                  removePending={removePending}
+                  approvePending={approvePending}
+                  appsMutate={appsMutate}
+                />
               ))}
             </div>
           )}

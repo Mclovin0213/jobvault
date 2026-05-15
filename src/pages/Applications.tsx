@@ -31,7 +31,17 @@ const LS_GROUP_BY = 'applications.groupBy'
 const LS_SORT_BY = 'applications.sortBy'
 const LS_SORT_DIR = 'applications.sortDir'
 
-export function Applications({ apps, loading }: { apps: Application[]; loading: boolean }) {
+export function Applications({
+  apps,
+  loading,
+  updateApp,
+  removeApp,
+}: {
+  apps: Application[]
+  loading: boolean
+  updateApp: (id: string, patch: Partial<Application>) => Promise<void>
+  removeApp: (id: string) => Promise<void>
+}) {
   const [search, setSearch] = useState('')
   const [activeStatuses, setActiveStatuses] = useState<Set<Status>>(new Set())
   const [activeSources, setActiveSources] = useState<Set<string>>(new Set())
@@ -265,6 +275,8 @@ export function Applications({ apps, loading }: { apps: Application[]; loading: 
                             app={app}
                             expanded={expandedIds.has(app.id)}
                             onToggle={() => toggleExpanded(app.id)}
+                            onUpdate={updateApp}
+                            onRemove={removeApp}
                           />
                         ))}
                       </div>

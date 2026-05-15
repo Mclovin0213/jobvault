@@ -1,5 +1,5 @@
 import { LogOut, Moon, Sun } from 'lucide-react'
-import type { User } from 'firebase/auth'
+import type { StoredUser } from '@/auth/adapter'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -24,7 +24,7 @@ export function Nav({
 }: {
   view: View
   onView: (v: View) => void
-  user: User | null
+  user: StoredUser | null
   onSignOut: () => void
   dark: boolean
   onToggleDark: () => void

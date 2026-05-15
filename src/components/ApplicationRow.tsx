@@ -1,9 +1,7 @@
 import { useCallback, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
-import { deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { ChevronDown, ChevronRight, ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { db } from '@/firebase'
 import type { Application, Status, WorkArrangement } from '@/types'
 import { STATUSES, WORK_ARRANGEMENTS, STATUS_LABELS } from '@/types'
 import { Input } from '@/components/ui/input'
@@ -24,16 +22,15 @@ import {
 
 type FieldUpdate = Partial<Pick<Application, 'company' | 'role' | 'salary' | 'location' | 'source' | 'notes' | 'tags'>>
 
-function useRowSaver(id: string) {
+type UpdateFn = (id: string, patch: Partial<Application>) => Promise<void>
+type RemoveFn = (id: string) => Promise<void>
+
+function useRowSaver(id: string, onUpdate: UpdateFn) {
   const pendingRef = useRef<FieldUpdate>({})
   const saver = useDebouncedSaver<FieldUpdate>(async update => {
     if (Object.keys(update).length === 0) return
     pendingRef.current = {}
-    try {
-      await updateDoc(doc(db, 'applications', id), update)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Save failed')
-    }
+    await onUpdate(id, update)
   })
   const queue = useCallback(
     (patch: FieldUpdate) => {
@@ -108,18 +105,6 @@ function TagsCell({
       }}
     />
   )
-}
-
-async function handleStatusChange(app: Application, status: Status) {
-  const update: Record<string, unknown> = { status }
-  if (status === 'applied' && !app.appliedAt) {
-    update.appliedAt = serverTimestamp()
-  }
-  try {
-    await updateDoc(doc(db, 'applications', app.id), update)
-  } catch (e) {
-    toast.error(e instanceof Error ? e.message : 'Update failed')
-  }
 }
 
 function CompactRow({
@@ -197,22 +182,26 @@ function CompactRow({
 function ExpandedRow({
   app,
   onCollapse,
+  onUpdate,
+  onRemove,
 }: {
   app: Application
   onCollapse: () => void
+  onUpdate: UpdateFn
+  onRemove: RemoveFn
 }) {
-  const row = useRowSaver(app.id)
+  const row = useRowSaver(app.id, onUpdate)
 
   const handleDelete = useCallback(async () => {
     if (!confirm('Delete this application?')) return
     await row.cancel()
     try {
-      await deleteDoc(doc(db, 'applications', app.id))
+      await onRemove(app.id)
       toast.success('Deleted')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Delete failed')
     }
-  }, [app.id, row])
+  }, [app.id, row, onRemove])
 
   const collapseButton = (
     <button
@@ -239,7 +228,7 @@ function ExpandedRow({
   )
 
   const statusSelect = (
-    <Select value={app.status} onValueChange={v => void handleStatusChange(app, v as Status)}>
+    <Select value={app.status} onValueChange={v => void onUpdate(app.id, { status: v as Status })}>
       <SelectTrigger className="h-9">
         <SelectValue>
           <StatusBadge status={app.status} className="text-[11px]" />
@@ -260,7 +249,7 @@ function ExpandedRow({
       value={app.workArrangement || '__none__'}
       onValueChange={v => {
         const next = (v === '__none__' ? '' : v) as WorkArrangement
-        void updateDoc(doc(db, 'applications', app.id), { workArrangement: next })
+        void onUpdate(app.id, { workArrangement: next })
       }}
     >
       <SelectTrigger className="h-9">
@@ -384,15 +373,19 @@ export function ApplicationRow({
   app,
   expanded,
   onToggle,
+  onUpdate,
+  onRemove,
 }: {
   app: Application
   expanded: boolean
   onToggle: () => void
+  onUpdate: UpdateFn
+  onRemove: RemoveFn
 }) {
   return (
     <div className={cn('border-l-4', STATUS_BORDER[app.status])}>
       {expanded ? (
-        <ExpandedRow app={app} onCollapse={onToggle} />
+        <ExpandedRow app={app} onCollapse={onToggle} onUpdate={onUpdate} onRemove={onRemove} />
       ) : (
         <CompactRow app={app} onToggle={onToggle} />
       )}

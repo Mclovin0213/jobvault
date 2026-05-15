@@ -1,60 +1,52 @@
 # Jules Application Tracker
 
-A tiny private web app for dumping job-application links, working through them, and tracking momentum (streaks, funnel, weekday heatmap, source/contributor breakdowns). One primary applicant + a few trusted collaborators who can also add links.
+A polished, **self-hostable**, human-in-the-loop job-application tracker. Paste links, work through them, track momentum. **Explicitly not** auto-apply, scraping, or mass-submission — those are non-goals.
 
-**Stack:** Vite + React 19 + React Compiler + TypeScript + Bun · Tailwind v4 · hand-rolled shadcn-style UI · Firebase (Auth + Firestore) · Vercel
+**Stack:** Vite + React 19 + React Compiler + TypeScript · Tailwind v4 · shadcn-style UI · Hono on Bun · Drizzle ORM · libSQL/SQLite · AGPL-3.0
 
-> **Heads up — this repo is going OSS.** It's being prepared to ship publicly under **AGPL-3.0** as a self-hostable application tracker. The Firebase backend is being replaced with **Drizzle + libSQL** (local SQLite for self-host, Turso for the hosted version), auth is becoming optional, and AI features are moving to BYO-key. The setup instructions below describe the *current* Firebase-based state — they'll be replaced once the migration lands. Full plan in [`OSS_PLAN.md`](./OSS_PLAN.md).
-
-## Setup
-
-### 1. Firebase project
-
-1. Create a Firebase project at https://console.firebase.google.com.
-2. Enable **Firestore** (Production mode) and **Authentication → Google provider**.
-3. In Project Settings → General → Your apps, register a Web app and copy the config.
-
-### 2. Local env
-
-Copy `.env.example` to `.env.local` and fill in the `VITE_FIREBASE_*` values.
-
-### 3. Deploy security rules
+## 30-second quickstart
 
 ```
-bun add -g firebase-tools   # one-time
-firebase login
-firebase use --add          # pick your project
-firebase deploy --only firestore:rules
-```
-
-### 4. Add allowlisted users
-
-In Firebase Console → Firestore, create a collection named `allowlist` and add a document for each allowed Google email **using the email as the document ID**:
-
-- `allowlist/javellaneda0213@gmail.com` → `{}` (empty doc is fine)
-- `allowlist/your-collaborator@email.com` → `{}`
-
-Anyone signing in with an email not in this list sees a "Not authorized" screen.
-
-### 5. Run
-
-```
+git clone <repo-url> jules-application-tracker
+cd jules-application-tracker
 bun install
-bun dev
+bun run build
+bun run start
 ```
 
-### 6. Deploy to Vercel
+Open <http://localhost:3000>. No env file needed for local single-user use — the default `AUTH_MODE=none` gives you a synthetic local user and `data/app.db` is created on first boot with all migrations auto-applied.
 
-1. Push this repo to GitHub.
-2. Import in Vercel — defaults work (Vite preset).
-3. Add the same `VITE_FIREBASE_*` env vars in the Vercel project settings.
-4. After first deploy, copy the Vercel domain into Firebase → Auth → Settings → Authorized domains.
+For development with hot reload:
 
-## What's in here
+```
+cp .env.example .env.local        # optional — defaults are fine for solo use
+bun run dev                       # vite on :5173, server on :3000
+```
 
-- **Dashboard** — streak, applied today, total applied, pending backlog · 30-day activity chart · funnel (Applied → Interview → Offer) · burn-down · weekday heatmap · per-source bar chart · per-contributor list.
-- **Applications** — search, filter chips for status/source/tags, **group by** (none/status/source/month-added) with collapsible sections, **sort by** (date added/applied/deadline/company) with asc/desc toggle (persisted to localStorage). Rows are compact one-liners by default and expand on click into the full inline-edit grid; status is signaled by a colored left border + badge. Status dropdown auto-stamps `appliedAt`.
-- **Kanban** — five columns, drag-drop via `@dnd-kit/core`. Dropping into "Applied" stamps `appliedAt`.
-- **Add Links** — paste any number of URLs (one per line), validates and bulk-creates pending applications.
+Vite proxies `/api/*` to the Bun server, so you can use either port during dev.
 
-All views read from a single live Firestore subscription so multiple devices stay in sync.
+## Features
+
+- **Bulk paste** — drop a list of job URLs and the server validates + dedupes.
+- **AI extraction (BYO key)** — `/api/extract` pulls company / role / salary / location from a posting. MiniMax provider wired today; see [docs/AI_PROVIDERS.md](docs/AI_PROVIDERS.md).
+- **Kanban** with drag-and-drop status changes; status flip to *applied* auto-stamps `appliedAt`.
+- **Applications grid** with search, chip filters, group-by (status / source / month-added), sort-by (date added / applied / deadline / company). Two-tier rows: compact-by-default, click to expand for inline edits.
+- **Pending queue** to triage before promoting to a tracked application.
+- **Dashboard** — streak, applied-today, funnel, weekday heatmap, source / contributor breakdowns. All computed client-side from a single source of truth.
+- **Multi-user-ready** — optional Google OAuth + allowlist for shared deployments. Default is single-user no-auth.
+
+## Documentation
+
+- [Self-hosting](docs/SELF_HOSTING.md) — install, persistence, upgrade, production checklist.
+- [Configuration](docs/CONFIGURATION.md) — every env var explained.
+- [AI providers](docs/AI_PROVIDERS.md) — wiring extraction, BYO-key model.
+
+## Non-goals
+
+- No auto-apply bots, scraping, or mass submission.
+- No hosted SaaS — this is meant to be run by you, on your machine or your server.
+- No payment infrastructure.
+
+## License
+
+[AGPL-3.0](LICENSE). If you run a modified version as a network service, you must publish your changes. This is intentional: it preserves the spirit of the project and blocks SaaS-style repackaging.

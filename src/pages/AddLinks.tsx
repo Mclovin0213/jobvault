@@ -1,15 +1,14 @@
 import { useState } from 'react'
-import { collection, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore'
 import { toast } from 'sonner'
-import type { User } from 'firebase/auth'
-import { db } from '@/firebase'
-import { hostnameOf, parseUrlsFromPaste } from '@/lib/urls'
+import { parseUrlsFromPaste } from '@/lib/urls'
 import { extractUrl } from '@/lib/extract'
+import type { NewPendingUrl } from '@/storage/adapter'
+import type { ExtractedFields, PendingUrl } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-const EMPTY_EXTRACTED = {
+const EMPTY_EXTRACTED: ExtractedFields = {
   company: '',
   role: '',
   salary: '',
@@ -20,22 +19,26 @@ const EMPTY_EXTRACTED = {
 
 const EXTRACT_CONCURRENCY = 4
 
-async function runExtractions(jobs: { id: string; url: string }[]) {
+type UpdatePendingFn = (id: string, patch: Partial<PendingUrl>) => Promise<void>
+
+async function runExtractions(
+  jobs: { id: string; url: string }[],
+  updatePending: UpdatePendingFn,
+) {
   let i = 0
   const workers = Array.from({ length: Math.min(EXTRACT_CONCURRENCY, jobs.length) }, async () => {
     while (i < jobs.length) {
       const job = jobs[i++]
-      const ref = doc(db, 'pendingUrls', job.id)
-      await updateDoc(ref, { extraction: 'loading' }).catch(() => {})
+      await updatePending(job.id, { extraction: 'loading' }).catch(() => {})
       const result = await extractUrl(job.url)
       if (result.ok) {
-        await updateDoc(ref, {
+        await updatePending(job.id, {
           extraction: 'done',
           extracted: result.extracted,
           extractError: '',
         }).catch(() => {})
       } else {
-        await updateDoc(ref, {
+        await updatePending(job.id, {
           extraction: 'error',
           extractError: result.error,
         }).catch(() => {})
@@ -45,7 +48,13 @@ async function runExtractions(jobs: { id: string; url: string }[]) {
   await Promise.all(workers)
 }
 
-export function AddLinks({ user }: { user: User }) {
+export function AddLinks({
+  createPending,
+  updatePending,
+}: {
+  createPending: (inputs: NewPendingUrl[]) => Promise<PendingUrl[]>
+  updatePending: UpdatePendingFn
+}) {
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const preview = parseUrlsFromPaste(text)
@@ -54,35 +63,27 @@ export function AddLinks({ user }: { user: User }) {
     if (preview.valid.length === 0) return
     setSubmitting(true)
     try {
-      const jobs: { id: string; url: string }[] = []
-      const chunks: string[][] = []
-      for (let i = 0; i < preview.valid.length; i += 400) {
-        chunks.push(preview.valid.slice(i, i + 400))
+      const inputs: NewPendingUrl[] = preview.valid.map(url => ({
+        url,
+        hostname: '',
+        extraction: 'idle',
+        extracted: { ...EMPTY_EXTRACTED },
+        extractError: '',
+        addedBy: '',
+        addedByName: '',
+      }))
+      const created = await createPending(inputs)
+      if (created.length > 0) {
+        toast.success(
+          `Added ${created.length} to Pending — extracting…` +
+            (preview.invalid.length ? ` · ${preview.invalid.length} skipped` : ''),
+        )
+        setText('')
+        void runExtractions(
+          created.map(c => ({ id: c.id, url: c.url })),
+          updatePending,
+        )
       }
-      for (const chunk of chunks) {
-        const batch = writeBatch(db)
-        for (const url of chunk) {
-          const ref = doc(collection(db, 'pendingUrls'))
-          jobs.push({ id: ref.id, url })
-          batch.set(ref, {
-            url,
-            hostname: hostnameOf(url),
-            extraction: 'idle',
-            extracted: EMPTY_EXTRACTED,
-            extractError: '',
-            createdAt: serverTimestamp(),
-            addedBy: user.uid,
-            addedByName: user.displayName ?? user.email ?? 'Unknown',
-          })
-        }
-        await batch.commit()
-      }
-      toast.success(
-        `Added ${jobs.length} to Pending — extracting…` +
-          (preview.invalid.length ? ` · ${preview.invalid.length} skipped` : ''),
-      )
-      setText('')
-      void runExtractions(jobs)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to add links')
     } finally {

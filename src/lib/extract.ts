@@ -1,4 +1,3 @@
-import { auth } from '@/firebase'
 import type { ExtractedFields } from '@/types'
 
 export type ExtractResult =
@@ -16,14 +15,10 @@ const EMPTY: ExtractedFields = {
 
 export async function extractUrl(url: string): Promise<ExtractResult> {
   try {
-    const token = await auth.currentUser?.getIdToken()
-    if (!token) return { ok: false, error: 'not_signed_in' }
     const res = await fetch('/api/extract', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${token}`,
-      },
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url }),
     })
     if (!res.ok) {

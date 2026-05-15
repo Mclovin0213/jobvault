@@ -8,10 +8,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { ExternalLink } from 'lucide-react'
-import { toast } from 'sonner'
-import { db } from '@/firebase'
 import type { Application, Status } from '@/types'
 import { STATUSES, STATUS_LABELS } from '@/types'
 import { Card, CardContent } from '@/components/ui/card'
@@ -128,7 +125,13 @@ function MobileTab({
   )
 }
 
-export function Kanban({ apps }: { apps: Application[] }) {
+export function Kanban({
+  apps,
+  updateApp,
+}: {
+  apps: Application[]
+  updateApp: (id: string, patch: Partial<Application>) => Promise<void>
+}) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const [mobileStatus, setMobileStatus] = useState<Status>('pending')
   const grouped = useMemo(() => {
@@ -150,15 +153,7 @@ export function Kanban({ apps }: { apps: Application[] }) {
     if (!STATUSES.includes(target)) return
     const app = apps.find(a => a.id === active.id)
     if (!app || app.status === target) return
-    const update: Record<string, unknown> = { status: target }
-    if (target === 'applied' && !app.appliedAt) {
-      update.appliedAt = serverTimestamp()
-    }
-    try {
-      await updateDoc(doc(db, 'applications', app.id), update)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Move failed')
-    }
+    await updateApp(app.id, { status: target })
   }
 
   return (

@@ -1,61 +1,59 @@
 import { useEffect, useState } from 'react'
-import {
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut as firebaseSignOut,
-  type User,
-} from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
-import { auth, db, googleProvider } from '@/firebase'
+import { restAuthAdapter } from '@/auth/rest'
+import type { StoredUser } from '@/auth/adapter'
 
-export type AuthStatus = 'loading' | 'signed-out' | 'checking-allowlist' | 'allowed' | 'denied'
+export type AuthStatus = 'loading' | 'signed-out' | 'allowed'
 
 export interface AuthState {
-  user: User | null
+  user: StoredUser | null
   status: AuthStatus
-  signIn: () => Promise<void>
+  signIn: () => void
   signOut: () => Promise<void>
   error: string | null
 }
 
 export function useAuth(): AuthState {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<StoredUser | null>(null)
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async u => {
-      setUser(u)
-      if (!u) {
-        setStatus('signed-out')
-        return
-      }
-      if (!u.email) {
-        setStatus('denied')
-        return
-      }
-      setStatus('checking-allowlist')
+    let cancelled = false
+    void (async () => {
       try {
-        const snap = await getDoc(doc(db, 'allowlist', u.email))
-        setStatus(snap.exists() ? 'allowed' : 'denied')
+        const u = await restAuthAdapter.getCurrentUser()
+        if (cancelled) return
+        if (u) {
+          setUser(u)
+          setStatus('allowed')
+        } else {
+          setUser(null)
+          setStatus('signed-out')
+        }
       } catch (e) {
+        if (cancelled) return
         setError(e instanceof Error ? e.message : String(e))
-        setStatus('denied')
+        setStatus('signed-out')
       }
-    })
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  async function signIn() {
+  function signIn() {
     setError(null)
-    try {
-      await signInWithPopup(auth, googleProvider)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
+    restAuthAdapter.signIn()
   }
 
   async function signOut() {
-    await firebaseSignOut(auth)
+    try {
+      await restAuthAdapter.signOut()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+    setUser(null)
+    setStatus('signed-out')
   }
 
   return { user, status, signIn, signOut, error }

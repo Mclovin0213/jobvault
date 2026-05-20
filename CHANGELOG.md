@@ -6,6 +6,40 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-20
+
+### Security
+- **SSRF / DNS rebinding (`POST /api/extract`).** The pre-fetch hostname check
+  in `server/lib/safeUrl.ts` validated resolved IPs but the subsequent
+  `fetch()` re-resolved the hostname, leaving a TOCTOU window. A low-TTL DNS
+  record could resolve to a public IP at validation and a private IP
+  (`169.254.169.254`, RFC1918, loopback) at connect time. On cloud-hosted
+  self-deployments this could be used to reach the instance metadata service
+  and exfiltrate IAM credentials via the LLM's structured-output path.
+  Now the validated IP is pinned through to the socket via the new
+  `server/lib/pinnedFetch.ts` (Host header + TLS SNI preserved; cert
+  validation runs against the original hostname). The pin is reapplied on
+  every redirect hop.
+- **LLM parse-failure echo (`/api/extract`).** The `llm_unparseable_json`
+  error path used to echo up to 300 chars of raw LLM output to the response,
+  which was a viable side channel for the SSRF above (and could surface page
+  content in error responses). The endpoint now returns a canned
+  `llm_unparseable_json`; verbose detail is still logged behind
+  `DEBUG_EXTRACT=true`.
+- **AI test-endpoint error classification (`POST /api/settings/ai/test`).**
+  Upstream SDK errors were reflected back as `e.message.slice(0, 300)`. With
+  the `openai-compatible` provider this turned the test endpoint into a probe
+  for internal HTTP services. Errors are now collapsed to a fixed vocabulary:
+  `auth_error` / `model_not_found` / `network_error` / `timeout` /
+  `rate_limited` / `test_failed`.
+- **AI `baseUrl` validation.** `aiSettingsPatchSchema` / `aiTestSchema` now
+  require `baseUrl` to be empty or a parseable `http(s)://` URL. Loopback /
+  RFC1918 targets are still accepted (Ollama / LM Studio remain in scope);
+  exotic schemes are not.
+
+### Credits
+Self-disclosed via internal security review on 2026-05-20.
+
 ## [0.2.0] - 2026-05-20
 
 ### Changed
@@ -51,7 +85,8 @@ Initial OSS release.
   CI, and OSS scaffolding (AGPL-3.0 license, CONTRIBUTING, CODE_OF_CONDUCT,
   SECURITY policy, issue/PR templates).
 
-[Unreleased]: https://github.com/Mclovin0213/jobvault/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Mclovin0213/jobvault/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Mclovin0213/jobvault/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Mclovin0213/jobvault/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Mclovin0213/jobvault/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Mclovin0213/jobvault/releases/tag/v0.1.0

@@ -91,12 +91,30 @@ const aiProvider = z.enum([
   'openai-compatible',
 ])
 
+// Empty string is allowed (cleared/unset); a non-empty value must be a
+// parseable http(s) URL. Keeps localhost/loopback in scope for self-hosters
+// running Ollama / LM Studio — the IP-range filtering lives separately on the
+// /ai/test path, which also sanitises upstream errors.
+const aiBaseUrl = z.string().max(500).superRefine((val, ctx) => {
+  if (val.length === 0) return
+  let u: URL
+  try {
+    u = new URL(val)
+  } catch {
+    ctx.addIssue({ code: 'custom', message: 'invalid_base_url' })
+    return
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    ctx.addIssue({ code: 'custom', message: 'invalid_base_url_scheme' })
+  }
+})
+
 export const aiSettingsPatchSchema = z
   .object({
     provider: aiProvider,
     apiKey: z.string().max(500),
     model: z.string().max(200),
-    baseUrl: z.string().max(500),
+    baseUrl: aiBaseUrl,
   })
   .partial()
   .strict()
@@ -106,7 +124,7 @@ export const aiTestSchema = z
     provider: aiProvider,
     apiKey: z.string().max(500),
     model: z.string().max(200),
-    baseUrl: z.string().max(500),
+    baseUrl: aiBaseUrl,
   })
   .partial()
   .strict()

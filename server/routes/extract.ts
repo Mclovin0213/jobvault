@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { generateText } from 'ai'
 import { requireUser } from '../lib/requireUser.ts'
-import { safeUrl } from '../lib/safeUrl.ts'
+import { resolveSafeUrl, safeUrl, type Resolver } from '../lib/safeUrl.ts'
+import { pickAddress, pinnedFetch, type PinnedFetch } from '../lib/pinnedFetch.ts'
 import { rateLimit } from '../lib/rateLimit.ts'
 import { htmlToText } from '../lib/htmlToText.ts'
 import { getAdapter } from '../lib/db.ts'
@@ -35,19 +36,27 @@ const EMPTY: ExtractedFields = {
   source: '',
 }
 
+export type FetchPageDeps = {
+  resolver?: Resolver
+  dial?: PinnedFetch
+}
+
 export async function fetchPage(
   initialUrl: string,
+  deps: FetchPageDeps = {},
 ): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  const dial = deps.dial ?? pinnedFetch
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
     let current = initialUrl
     let res: Response | null = null
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-      const safety = await safeUrl(current)
+      const safety = await resolveSafeUrl(current, deps.resolver)
       if (!safety.ok) return hop === 0 ? safety : { ok: false, error: `redirect_${safety.error}` }
 
-      res = await fetch(current, {
+      const pin = pickAddress(safety.addresses)
+      res = await dial(safety.parsed, pin.address, pin.family, {
         method: 'GET',
         headers: {
           'user-agent': UA,
@@ -55,7 +64,7 @@ export async function fetchPage(
           'accept-language': 'en-US,en;q=0.9',
         },
         signal: controller.signal,
-        redirect: 'manual',
+        timeoutMs: FETCH_TIMEOUT_MS,
       })
 
       if (res.status < 300 || res.status >= 400) break
@@ -172,7 +181,7 @@ async function callModel(
     parsed = JSON.parse(jsonMatch[0])
   } catch (e) {
     if (DEBUG) console.error('[extract] parse failed. text was:', answer, 'error:', e)
-    return { ok: false, error: `llm_unparseable_json: ${answer.slice(0, 300)}` }
+    return { ok: false, error: 'llm_unparseable_json' }
   }
 
   const wa = (parsed.workArrangement ?? '').toString().toLowerCase()

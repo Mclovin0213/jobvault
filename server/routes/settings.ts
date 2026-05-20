@@ -102,12 +102,27 @@ app.post('/ai/test', async c => {
     const text = res.text.trim()
     return c.json({ ok: true, model: config.model || meta.defaultModel, sample: text.slice(0, 40) })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'test_failed'
-    return c.json({ ok: false, error: msg.slice(0, 300) })
+    return c.json({ ok: false, error: classifyAiTestError(e) })
   } finally {
     clearTimeout(timer)
   }
 })
+
+// Map upstream SDK errors to a fixed vocabulary so a signed-in user can't use
+// the test endpoint as a probe for internal HTTP services (relevant when
+// provider is openai-compatible and baseUrl points at loopback or RFC1918).
+function classifyAiTestError(e: unknown): string {
+  const msg = (e instanceof Error ? e.message : '').toLowerCase()
+  if (!msg) return 'test_failed'
+  if (/aborted|timeout|timed out/.test(msg)) return 'timeout'
+  if (/401|403|unauthor|forbidden|invalid.*api|api.*key/.test(msg)) return 'auth_error'
+  if (/404|not.*found|no.*such.*model|unknown.*model|model.*not/.test(msg)) return 'model_not_found'
+  if (/429|rate.?limit|quota/.test(msg)) return 'rate_limited'
+  if (/econnrefused|enotfound|econnreset|eai_again|network|fetch failed|tls|certificate/.test(msg)) {
+    return 'network_error'
+  }
+  return 'test_failed'
+}
 
 app.all('/ai', c => {
   c.header('Allow', 'GET, PATCH')

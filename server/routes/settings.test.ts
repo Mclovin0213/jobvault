@@ -127,7 +127,24 @@ describe('POST /api/settings/ai/test', () => {
     expect(await r.json()).toEqual({ ok: false, error: 'missing_api_key' })
   })
 
-  it('surfaces provider errors as ok:false', async () => {
+  it('classifies provider errors into a fixed vocabulary (no echo)', async () => {
+    genText = async () => {
+      // Simulate an upstream message that would, if echoed, reveal probe info
+      // (e.g. internal IP, response body, banner). The handler must collapse it.
+      throw new Error('connect ECONNREFUSED 127.0.0.1:11434 — listening process: ollama-internal')
+    }
+    const r = await jsonReq(buildApp(), '/api/settings/ai/test', 'POST', {
+      provider: 'openai-compatible',
+      baseUrl: 'http://example.com',
+      apiKey: 'sk-bad',
+    })
+    const body = await r.json()
+    expect(body).toEqual({ ok: false, error: 'network_error' })
+    expect(JSON.stringify(body)).not.toContain('ollama-internal')
+    expect(JSON.stringify(body)).not.toContain('127.0.0.1')
+  })
+
+  it('classifies auth failures as auth_error', async () => {
     genText = async () => {
       throw new Error('401 invalid api key')
     }
@@ -135,7 +152,41 @@ describe('POST /api/settings/ai/test', () => {
       provider: 'openai',
       apiKey: 'sk-bad',
     })
-    expect(await r.json()).toEqual({ ok: false, error: '401 invalid api key' })
+    expect(await r.json()).toEqual({ ok: false, error: 'auth_error' })
+  })
+})
+
+describe('aiSettingsPatch validation', () => {
+  it('rejects a non-URL baseUrl', async () => {
+    const r = await jsonReq(buildApp(), '/api/settings/ai', 'PATCH', {
+      provider: 'openai-compatible',
+      baseUrl: 'not a url',
+    })
+    expect(r.status).toBe(400)
+  })
+
+  it('rejects a non-http(s) baseUrl scheme', async () => {
+    const r = await jsonReq(buildApp(), '/api/settings/ai', 'PATCH', {
+      provider: 'openai-compatible',
+      baseUrl: 'file:///etc/passwd',
+    })
+    expect(r.status).toBe(400)
+  })
+
+  it('allows an empty baseUrl (unset)', async () => {
+    const r = await jsonReq(buildApp(), '/api/settings/ai', 'PATCH', {
+      provider: 'openai',
+      baseUrl: '',
+    })
+    expect(r.status).toBe(204)
+  })
+
+  it('allows loopback baseUrl for self-hosted Ollama', async () => {
+    const r = await jsonReq(buildApp(), '/api/settings/ai', 'PATCH', {
+      provider: 'openai-compatible',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+    })
+    expect(r.status).toBe(204)
   })
 })
 

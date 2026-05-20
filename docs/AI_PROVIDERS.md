@@ -62,5 +62,7 @@ When AI is unconfigured, the key is missing, or the model errors, `/api/extract`
 ## Cost / safety notes
 
 - `/api/extract` and the test endpoint are rate-limited per signed-in user.
-- The SSRF guard in `server/lib/safeUrl.ts` rejects loopback, RFC1918, link-local, and IPv6 private addresses before fetching, and pins DNS during the fetch to prevent rebinding.
+- The SSRF guard in `server/lib/safeUrl.ts` rejects loopback, RFC1918, link-local, and IPv6 private addresses before fetching. The validated IP is then **pinned through to the socket** by `server/lib/pinnedFetch.ts` (Host header + TLS SNI preserved against the original hostname, cert validation against the hostname not the IP) so DNS rebinding between validation and connect cannot redirect the request to a private address. The same pin is applied on every redirect hop.
 - The fetched HTML is capped at 1 MB before reaching the model.
+- `/api/settings/ai/test` errors are normalized to a fixed vocabulary (`auth_error` / `model_not_found` / `network_error` / `timeout` / `rate_limited` / `test_failed`) so the endpoint can't be used to probe internal services through reflected upstream errors. The `baseUrl` field is rejected unless empty or a parseable `http(s)://` URL.
+- On cloud-hosted deployments, prefer the **environment-variable** configuration path (`AI_PROVIDER`, `AI_BASE_URL`, etc.) — env wins, which makes the in-app Settings page read-only and prevents a signed-in user from changing `baseUrl` at runtime.

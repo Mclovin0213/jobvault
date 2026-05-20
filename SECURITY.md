@@ -20,16 +20,15 @@ an early-stage project; pin to a tag and watch releases.
 ## Trust model — read this before exposing an instance
 
 Jobvault is a **single shared pool, trust-based** app. There are no per-user data
-boundaries: anyone who can authenticate (or anyone at all, in `AUTH_MODE=none`)
-can read and edit every record. This is an intentional design decision for the
-"me / my small group" use case, not a bug.
+boundaries: anyone who can authenticate can read and edit every record. This is
+an intentional design decision for the "me / my small group" use case, not a bug.
 
 Specific things operators should know:
 
-- **`AUTH_MODE=none` is fail-closed in production.** With `NODE_ENV=production`,
-  the server refuses every request unless `ALLOW_NO_AUTH=true` is explicitly set.
-  Only set it if the instance is on a trusted network / behind your own
-  reverse-proxy auth or VPN.
+- **Auth is local email/password.** Passwords are scrypt-hashed (`node:crypto`);
+  the first user is created via an in-app `/setup` form gated on an empty users
+  table, or by setting `ADMIN_EMAIL` + `ADMIN_PASSWORD` at first boot for
+  headless deploys.
 - **AI provider API keys are stored in plaintext** in the SQLite database
   (`data/app.db`). The trust boundary is the filesystem: protect that file with
   OS permissions and don't commit it. Keys are never returned to the browser —
@@ -40,6 +39,6 @@ Specific things operators should know:
   chars and kept secret; rotating it invalidates all sessions.
 
 Reports that amount to "the trust model is permissive by design" (e.g. one
-allowlisted user can edit another's rows) are known and out of scope. Reports of
+admin can edit another admin's rows) are known and out of scope. Reports of
 auth bypass, secret leakage to the browser, injection, or RCE are in scope and
 very welcome.

@@ -21,7 +21,7 @@ Open <http://localhost:3000>. On first boot:
 
 - `data/app.db` is created if missing.
 - Drizzle migrations from `src/storage/sqlite/migrations/` are applied automatically.
-- With the default `AUTH_MODE=none`, you sign in as a synthetic local user — no OAuth setup required.
+- The first page load shows a one-time setup form. Pick a display name, email, and password (12+ chars) — that creates the admin user. For headless / Docker deploys, set `ADMIN_EMAIL` + `ADMIN_PASSWORD` instead and the admin is created at boot.
 
 ## Configuration
 
@@ -50,10 +50,9 @@ Migrations apply automatically at boot. If a migration fails, the server exits b
 
 For anything beyond a localhost-only personal install:
 
-1. **Auth.** Either set `AUTH_MODE=oauth` with Google credentials, or run behind a reverse proxy / VPN with `AUTH_MODE=none` + `ALLOW_NO_AUTH=true`. The server refuses to start with `AUTH_MODE=none` in production unless `ALLOW_NO_AUTH=true` is explicit — this is the guard against accidentally exposing an open instance.
-2. **`SESSION_SECRET`** must be ≥ 32 characters. Generate one with `openssl rand -base64 32`.
-3. **`PUBLIC_BASE_URL`** should be the public origin (e.g. `https://tracker.example.com`). It's used to build the OAuth redirect URI.
-4. **TLS** must be terminated upstream (nginx, Caddy, Cloudflare). Bun serves plain HTTP.
+1. **`SESSION_SECRET`** is required and must be ≥ 32 characters. Generate one with `openssl rand -base64 48`. The server refuses to start without it.
+2. **Bootstrap the admin** either via the in-app setup form (visit the site once and create the account) or via `ADMIN_EMAIL` + `ADMIN_PASSWORD` env vars (created at first boot when the DB is empty).
+3. **TLS** must be terminated upstream (nginx, Caddy, Cloudflare). Bun serves plain HTTP.
 
 ## Docker
 
@@ -63,13 +62,13 @@ The shipped `docker-compose.yml` pulls a prebuilt multi-arch image (amd64 + arm6
 docker compose up -d
 ```
 
-Single container, listens on `:3000`, persists to `./data` via a bind mount. To build from source instead, comment the `image:` line and uncomment `build: .` in `docker-compose.yml`. Set env vars in a `.env` file next to the compose file (or in your orchestrator) to enable OAuth and/or AI extraction — see [CONFIGURATION.md](CONFIGURATION.md).
+Single container, listens on `:3000`, persists to `./data` via a bind mount. To build from source instead, comment the `image:` line and uncomment `build: .` in `docker-compose.yml`. Set env vars in a `.env` file next to the compose file (or in your orchestrator) to bootstrap the admin and/or AI extraction — see [CONFIGURATION.md](CONFIGURATION.md).
 
 The container ships a `HEALTHCHECK` (Docker/Portainer/Watchtower will report health). Image tags follow SemVer (`v1.2.3`, `1.2`, `latest`) so Watchtower/Renovate can track updates.
 
 ## Behind a reverse proxy (TLS)
 
-Bun serves plain HTTP; terminate TLS upstream. Set `PUBLIC_BASE_URL` to the public origin so OAuth redirects are built correctly.
+Bun serves plain HTTP; terminate TLS upstream.
 
 **Caddy** (auto HTTPS via Let's Encrypt):
 
@@ -94,8 +93,6 @@ server {
     }
 }
 ```
-
-Then run with `PUBLIC_BASE_URL=https://tracker.example.com`.
 
 ## Migrating from an existing Firestore-backed instance
 

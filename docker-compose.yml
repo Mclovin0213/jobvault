@@ -13,16 +13,14 @@ services:
       DATABASE_URL: file:/app/data/app.db
       PORT: ${PORT:-3000}
 
-      # ── Auth ──────────────────────────────────────────────────────────
-      # AUTH_MODE=none in production requires ALLOW_NO_AUTH=true (fail-closed).
-      AUTH_MODE: ${AUTH_MODE:-none}
-      ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-}
+      # ── Session + first-run admin ─────────────────────────────────────
+      # Required. Generate with: `openssl rand -base64 48`
       SESSION_SECRET: ${SESSION_SECRET:-}
-      OAUTH_PROVIDER: ${OAUTH_PROVIDER:-google}
-      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
-      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
-      ALLOWLIST: ${ALLOWLIST:-}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      # Optional headless bootstrap. If both set and DB is empty,
+      # creates this admin on first start. Otherwise, complete setup in the UI.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-}
 
       # ── AI extraction (optional, BYO key) ─────────────────────────────
       # Env wins over the in-app Settings page. Leave unset to configure

@@ -1,5 +1,11 @@
 import type { AiSettingsRow, Application, PendingUrl } from '@/types'
-import type { DataAdapter, NewApplication, NewPendingUrl } from '@/storage/adapter'
+import type {
+  DataAdapter,
+  NewApplication,
+  NewLocalUser,
+  NewPendingUrl,
+  StoredLocalUser,
+} from '@/storage/adapter'
 
 let nextId = 1
 function id(): string {
@@ -7,10 +13,10 @@ function id(): string {
   return `id_${nextId}`
 }
 
-export function memoryAdapter(initial: { allowedEmails?: string[] } = {}): DataAdapter {
+export function memoryAdapter(initial: { users?: StoredLocalUser[] } = {}): DataAdapter {
   const apps: Application[] = []
   const pendings: PendingUrl[] = []
-  const allowedEmails = (initial.allowedEmails ?? []).slice()
+  const users: StoredLocalUser[] = (initial.users ?? []).slice()
   let aiSettings: AiSettingsRow | null = null
 
   return {
@@ -59,8 +65,31 @@ export function memoryAdapter(initial: { allowedEmails?: string[] } = {}): DataA
       apps.push(app)
       return app
     },
-    async listAllowedEmails() {
-      return allowedEmails.slice()
+    async countUsers() {
+      return users.length
+    },
+    async findUserById(userId) {
+      return users.find(u => u.id === userId) ?? null
+    },
+    async findUserByEmail(email) {
+      const t = email.trim().toLowerCase()
+      return users.find(u => u.email === t) ?? null
+    },
+    async createUser(input: NewLocalUser) {
+      const email = input.email.trim().toLowerCase()
+      if (users.some(u => u.email === email)) {
+        throw new Error('user_email_taken')
+      }
+      const user: StoredLocalUser = {
+        id: id(),
+        email,
+        passwordHash: input.passwordHash,
+        displayName: input.displayName,
+        role: input.role,
+        createdAt: Date.now(),
+      }
+      users.push(user)
+      return user
     },
     async getAiSettings() {
       return aiSettings ? { ...aiSettings } : null

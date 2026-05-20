@@ -3,6 +3,17 @@ import type { AiSettingsRow, Application, PendingUrl } from '@/types'
 export type NewApplication = Omit<Application, 'id' | 'createdAt'>
 export type NewPendingUrl = Omit<PendingUrl, 'id' | 'createdAt'>
 
+export interface StoredLocalUser {
+  id: string
+  email: string
+  passwordHash: string
+  displayName: string
+  role: 'admin'
+  createdAt: number
+}
+
+export type NewLocalUser = Omit<StoredLocalUser, 'id' | 'createdAt'>
+
 export interface DataAdapter {
   listApplications(): Promise<Application[]>
   getApplication(id: string): Promise<Application | null>
@@ -17,7 +28,10 @@ export interface DataAdapter {
 
   approvePending(pendingId: string, application: NewApplication): Promise<Application>
 
-  listAllowedEmails(): Promise<string[]>
+  countUsers(): Promise<number>
+  findUserById(id: string): Promise<StoredLocalUser | null>
+  findUserByEmail(email: string): Promise<StoredLocalUser | null>
+  createUser(input: NewLocalUser): Promise<StoredLocalUser>
 
   getAiSettings(): Promise<AiSettingsRow | null>
   setAiSettings(patch: Partial<Omit<AiSettingsRow, 'updatedAt'>>): Promise<void>

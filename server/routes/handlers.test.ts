@@ -3,24 +3,28 @@ import { Hono } from 'hono'
 import { memoryAdapter } from '../lib/testHelpers'
 import { _resetRateLimitForTests } from '../lib/rateLimit'
 import { MAX_PENDING_BATCH } from '../lib/validation'
-import type { DataAdapter } from '@/storage/adapter'
-import type { StoredUser } from '@/auth/adapter'
+import type { DataAdapter, StoredLocalUser } from '@/storage/adapter'
 
 let adapter: DataAdapter
-let sessionUser: StoredUser | null = null
+let sessionUser: StoredLocalUser | null = null
 
 vi.mock('../lib/db.ts', () => ({
   getAdapter: async () => adapter,
 }))
 
 vi.mock('../lib/session.ts', () => ({
-  readSessionUser: async () => sessionUser,
-  getAppSession: async () => ({ user: sessionUser }),
+  getAppSession: async () => (sessionUser ? { userId: sessionUser.id } : {}),
   saveAppSession: async () => {},
   destroyAppSession: () => {},
-  getOAuthStateSession: async () => ({}),
-  saveOAuthStateSession: async () => {},
-  destroyOAuthStateSession: () => {},
+}))
+
+vi.mock('../lib/users.ts', () => ({
+  countUsers: async () => (sessionUser ? 1 : 0),
+  findUserById: async (id: string) =>
+    sessionUser && sessionUser.id === id ? sessionUser : null,
+  findUserByEmail: async () => null,
+  createUser: async () => sessionUser!,
+  verifyUserPassword: async () => null,
 }))
 
 const applicationsRoute = (await import('./applications')).default
@@ -42,14 +46,19 @@ const EMPTY_EXTRACTED = {
   source: '',
 }
 
+const TEST_USER: StoredLocalUser = {
+  id: 'u-1',
+  email: 'a@b.com',
+  passwordHash: 'scrypt$x$y$z$AA==$BB==',
+  displayName: 'A',
+  role: 'admin',
+  createdAt: 0,
+}
+
 beforeEach(() => {
   adapter = memoryAdapter()
   sessionUser = null
   _resetRateLimitForTests()
-  delete process.env.AUTH_MODE
-  delete process.env.ALLOW_NO_AUTH
-  delete process.env.NODE_ENV
-  delete process.env.ALLOWLIST
 })
 
 async function jsonReq(app: Hono, url: string, method: string, body?: unknown) {
@@ -61,90 +70,40 @@ async function jsonReq(app: Hono, url: string, method: string, body?: unknown) {
 }
 
 describe('auth shim', () => {
-  it('rejects no-auth in production unless ALLOW_NO_AUTH=true', async () => {
-    process.env.NODE_ENV = 'production'
-    const r = await buildApp().request('/api/applications')
-    expect(r.status).toBe(503)
-    expect(await r.json()).toEqual({ error: 'auth_not_configured' })
-  })
-
-  it('allows no-auth in production when ALLOW_NO_AUTH=true', async () => {
-    process.env.NODE_ENV = 'production'
-    process.env.ALLOW_NO_AUTH = 'true'
-    const r = await buildApp().request('/api/applications')
-    expect(r.status).toBe(200)
-  })
-
-  it('AUTH_MODE=oauth with no session returns 401', async () => {
-    process.env.AUTH_MODE = 'oauth'
-    sessionUser = null
+  it('returns 401 when no session is set', async () => {
     const r = await buildApp().request('/api/applications')
     expect(r.status).toBe(401)
     expect(await r.json()).toEqual({ error: 'unauthenticated' })
   })
 
-  it('AUTH_MODE=oauth with session in env allowlist returns 200', async () => {
-    process.env.AUTH_MODE = 'oauth'
-    process.env.ALLOWLIST = 'user@example.com,other@example.com'
-    sessionUser = { uid: 'g-123', email: 'user@example.com', displayName: 'User' }
+  it('returns 401 when session points to a missing user', async () => {
+    sessionUser = null
+    const r = await buildApp().request('/api/applications')
+    expect(r.status).toBe(401)
+  })
+
+  it('serves a request when a session user is present', async () => {
+    sessionUser = TEST_USER
     const r = await buildApp().request('/api/applications')
     expect(r.status).toBe(200)
-  })
-
-  it('AUTH_MODE=oauth with session not in env allowlist returns 403', async () => {
-    process.env.AUTH_MODE = 'oauth'
-    process.env.ALLOWLIST = 'someone@else.com'
-    sessionUser = { uid: 'g-123', email: 'user@example.com', displayName: 'User' }
-    const r = await buildApp().request('/api/applications')
-    expect(r.status).toBe(403)
-    expect(await r.json()).toEqual({ error: 'not_allowed' })
-  })
-
-  it('AUTH_MODE=oauth with empty ALLOWLIST allows any signed-in user', async () => {
-    process.env.AUTH_MODE = 'oauth'
-    process.env.ALLOWLIST = ''
-    sessionUser = { uid: 'g-123', email: 'someone@anywhere.com', displayName: 'Someone' }
-    const r = await buildApp().request('/api/applications')
-    expect(r.status).toBe(200)
-  })
-
-  it('AUTH_MODE=oauth allowlist is case-insensitive', async () => {
-    process.env.AUTH_MODE = 'oauth'
-    process.env.ALLOWLIST = 'User@Example.com'
-    sessionUser = { uid: 'g-123', email: 'user@example.COM', displayName: 'User' }
-    const r = await buildApp().request('/api/applications')
-    expect(r.status).toBe(200)
-  })
-
-  it('AUTH_MODE=oauth falls back to SQL allowlist when ALLOWLIST env unset', async () => {
-    process.env.AUTH_MODE = 'oauth'
-    adapter = memoryAdapter({ allowedEmails: ['user@example.com'] })
-    sessionUser = { uid: 'g-123', email: 'user@example.com', displayName: 'User' }
-    const r = await buildApp().request('/api/applications')
-    expect(r.status).toBe(200)
-  })
-
-  it('AUTH_MODE=oauth SQL allowlist denies non-matching email', async () => {
-    process.env.AUTH_MODE = 'oauth'
-    adapter = memoryAdapter({ allowedEmails: ['someone@else.com'] })
-    sessionUser = { uid: 'g-123', email: 'user@example.com', displayName: 'User' }
-    const r = await buildApp().request('/api/applications')
-    expect(r.status).toBe(403)
   })
 })
 
 describe('POST /api/applications', () => {
   it('400s on invalid body', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/applications', 'POST', { bogus: 1 })
     expect(r.status).toBe(400)
   })
 
   it('400s on non-http URL scheme', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/applications', 'POST', { url: 'javascript:alert(1)' })
     expect(r.status).toBe(400)
   })
 
   it('creates with server-stamped addedBy/addedByName', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/applications', 'POST', {
       url: 'https://example.com/x',
       addedBy: 'attacker',
@@ -152,13 +111,14 @@ describe('POST /api/applications', () => {
     })
     expect(r.status).toBe(201)
     const body = (await r.json()) as { addedBy: string; addedByName: string }
-    expect(body.addedBy).toBe('local')
-    expect(body.addedByName).toBe('Local User')
+    expect(body.addedBy).toBe('u-1')
+    expect(body.addedByName).toBe('A')
   })
 })
 
 describe('PATCH /api/applications/[id]', () => {
   it('auto-stamps appliedAt when status flips to applied', async () => {
+    sessionUser = TEST_USER
     const created = await adapter.createApplication({
       url: 'https://example.com/x',
       company: '',
@@ -173,8 +133,8 @@ describe('PATCH /api/applications/[id]', () => {
       deadline: null,
       followUpDate: null,
       appliedAt: null,
-      addedBy: 'local',
-      addedByName: 'Local',
+      addedBy: 'u-1',
+      addedByName: 'A',
     })
     const r = await jsonReq(buildApp(), `/api/applications/${created.id}`, 'PATCH', { status: 'applied' })
     expect(r.status).toBe(200)
@@ -183,6 +143,7 @@ describe('PATCH /api/applications/[id]', () => {
   })
 
   it('does not overwrite an existing appliedAt', async () => {
+    sessionUser = TEST_USER
     const created = await adapter.createApplication({
       url: 'https://example.com/x',
       company: '',
@@ -197,8 +158,8 @@ describe('PATCH /api/applications/[id]', () => {
       deadline: null,
       followUpDate: null,
       appliedAt: 1000,
-      addedBy: 'local',
-      addedByName: 'Local',
+      addedBy: 'u-1',
+      addedByName: 'A',
     })
     const r = await jsonReq(buildApp(), `/api/applications/${created.id}`, 'PATCH', { status: 'applied' })
     const body = (await r.json()) as { appliedAt: number | null }
@@ -206,6 +167,7 @@ describe('PATCH /api/applications/[id]', () => {
   })
 
   it('404s on missing row', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/applications/missing', 'PATCH', { notes: 'x' })
     expect(r.status).toBe(404)
   })
@@ -213,6 +175,7 @@ describe('PATCH /api/applications/[id]', () => {
 
 describe('DELETE /api/applications/[id]', () => {
   it('returns 204', async () => {
+    sessionUser = TEST_USER
     const created = await adapter.createApplication({
       url: 'https://example.com/x',
       company: '',
@@ -227,8 +190,8 @@ describe('DELETE /api/applications/[id]', () => {
       deadline: null,
       followUpDate: null,
       appliedAt: null,
-      addedBy: 'local',
-      addedByName: 'Local',
+      addedBy: 'u-1',
+      addedByName: 'A',
     })
     const r = await buildApp().request(`/api/applications/${created.id}`, { method: 'DELETE' })
     expect(r.status).toBe(204)
@@ -238,6 +201,7 @@ describe('DELETE /api/applications/[id]', () => {
 
 describe('method not allowed', () => {
   it('PATCH on /api/applications collection returns 405', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/applications', 'PATCH', {})
     expect(r.status).toBe(405)
     expect(r.headers.get('Allow')).toContain('GET')
@@ -246,16 +210,18 @@ describe('method not allowed', () => {
 
 describe('pending handlers', () => {
   it('POST /api/pending derives hostname server-side and ignores client-sent value', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/pending', 'POST', [
       { url: 'https://www.example.com/job', extracted: EMPTY_EXTRACTED },
     ])
     expect(r.status).toBe(201)
     const body = (await r.json()) as Array<{ hostname: string; addedBy: string }>
     expect(body[0].hostname).toBe('example.com')
-    expect(body[0].addedBy).toBe('local')
+    expect(body[0].addedBy).toBe('u-1')
   })
 
   it('POST /api/pending rejects non-http URL', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/pending', 'POST', [
       { url: 'file:///etc/passwd', extracted: EMPTY_EXTRACTED },
     ])
@@ -263,6 +229,7 @@ describe('pending handlers', () => {
   })
 
   it('POST /api/pending rejects oversized batches', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(
       buildApp(),
       '/api/pending',
@@ -276,6 +243,7 @@ describe('pending handlers', () => {
   })
 
   it('PATCH /api/pending/[id] re-derives hostname when url changes', async () => {
+    sessionUser = TEST_USER
     const [p] = await adapter.createPendingUrls([
       {
         url: 'https://old.example.com/x',
@@ -283,8 +251,8 @@ describe('pending handlers', () => {
         extraction: 'idle',
         extracted: EMPTY_EXTRACTED,
         extractError: '',
-        addedBy: 'local',
-        addedByName: 'Local',
+        addedBy: 'u-1',
+        addedByName: 'A',
       },
     ])
     const r = await jsonReq(buildApp(), `/api/pending/${p.id}`, 'PATCH', {
@@ -296,6 +264,7 @@ describe('pending handlers', () => {
   })
 
   it('approve 404s when pending row missing', async () => {
+    sessionUser = TEST_USER
     const r = await jsonReq(buildApp(), '/api/pending/missing/approve', 'POST', {
       url: 'https://example.com/x',
     })
@@ -304,6 +273,7 @@ describe('pending handlers', () => {
   })
 
   it('approve atomically deletes pending and creates application with appliedAt stamp', async () => {
+    sessionUser = TEST_USER
     const [p] = await adapter.createPendingUrls([
       {
         url: 'https://example.com/job',
@@ -311,8 +281,8 @@ describe('pending handlers', () => {
         extraction: 'done',
         extracted: EMPTY_EXTRACTED,
         extractError: '',
-        addedBy: 'local',
-        addedByName: 'Local',
+        addedBy: 'u-1',
+        addedByName: 'A',
       },
     ])
     const r = await jsonReq(buildApp(), `/api/pending/${p.id}/approve`, 'POST', {

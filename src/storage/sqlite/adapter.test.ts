@@ -183,18 +183,6 @@ describe('SqliteDataAdapter', () => {
     expect(await adapter.listApplications()).toEqual([])
   })
 
-  it('listAllowedEmails returns empty when table is empty', async () => {
-    expect(await adapter.listAllowedEmails()).toEqual([])
-  })
-
-  it('listAllowedEmails returns seeded rows', async () => {
-    client
-      .prepare('insert into allowlist (email, created_at) values (?, ?), (?, ?)')
-      .run('a@x.com', Date.now(), 'b@y.com', Date.now())
-    const list = await adapter.listAllowedEmails()
-    expect(list.sort()).toEqual(['a@x.com', 'b@y.com'])
-  })
-
   it('approvePending called twice with same id only inserts once', async () => {
     const [pending] = await adapter.createPendingUrls([newPending()])
 

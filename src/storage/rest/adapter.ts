@@ -2,7 +2,6 @@ import type { AiSettingsRow, Application, PendingUrl } from '@/types'
 import type {
   DataAdapter,
   NewApplication,
-  NewLocalUser,
   NewPendingUrl,
   StoredLocalUser,
 } from '../adapter'
@@ -71,15 +70,15 @@ export class RestDataAdapter implements DataAdapter {
     throw new Error('countUsers is server-only')
   }
 
-  async findUserById(_id: string): Promise<StoredLocalUser | null> {
+  async findUserById(): Promise<StoredLocalUser | null> {
     throw new Error('findUserById is server-only')
   }
 
-  async findUserByEmail(_email: string): Promise<StoredLocalUser | null> {
+  async findUserByEmail(): Promise<StoredLocalUser | null> {
     throw new Error('findUserByEmail is server-only')
   }
 
-  async createUser(_input: NewLocalUser): Promise<StoredLocalUser> {
+  async createUser(): Promise<StoredLocalUser> {
     throw new Error('createUser is server-only')
   }
 

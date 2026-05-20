@@ -11,6 +11,7 @@ import { resolveAiConfig } from '../lib/aiConfig.ts'
 const MAX_HTML_BYTES = 1_000_000
 const FETCH_TIMEOUT_MS = 12_000
 const MAX_REDIRECTS = 3
+const DEBUG = process.env.DEBUG_EXTRACT === 'true'
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -110,7 +111,7 @@ export async function fetchPage(
     const html = new TextDecoder('utf-8', { fatal: false }).decode(merged)
     const text = htmlToText(html)
     if (text.length < 80) return { ok: false, error: 'page_blocked_or_empty' }
-    if (truncated) console.log('[extract] body truncated at', MAX_HTML_BYTES, 'bytes')
+    if (truncated && DEBUG) console.log('[extract] body truncated at', MAX_HTML_BYTES, 'bytes')
     return { ok: true, text }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'fetch_failed' }
@@ -155,8 +156,10 @@ async function callModel(
   }
 
   const answer = result.text.trim()
-  console.log('[extract] LLM text:', answer)
-  if (result.reasoning) console.log('[extract] LLM reasoning length:', result.reasoning.length)
+  if (DEBUG) {
+    console.log('[extract] LLM text:', answer)
+    if (result.reasoning) console.log('[extract] LLM reasoning length:', result.reasoning.length)
+  }
 
   let parsed: Partial<ExtractedFields>
   try {
@@ -168,7 +171,7 @@ async function callModel(
     if (!jsonMatch) throw new Error('no JSON object found')
     parsed = JSON.parse(jsonMatch[0])
   } catch (e) {
-    console.error('[extract] parse failed. text was:', answer, 'error:', e)
+    if (DEBUG) console.error('[extract] parse failed. text was:', answer, 'error:', e)
     return { ok: false, error: `llm_unparseable_json: ${answer.slice(0, 300)}` }
   }
 
@@ -221,17 +224,17 @@ app.post('/', async c => {
   const safety = await safeUrl(url)
   if (!safety.ok) return c.json({ error: safety.error }, 400)
 
-  console.log('[extract] fetching:', url, 'for', auth.user.email)
+  if (DEBUG) console.log('[extract] fetching:', url)
   const page = await fetchPage(url)
   if (!page.ok) {
-    console.error('[extract] fetch failed:', page.error)
+    if (DEBUG) console.error('[extract] fetch failed:', page.error)
     return c.json({ error: page.error })
   }
-  console.log('[extract] page text length:', page.text.length)
+  if (DEBUG) console.log('[extract] page text length:', page.text.length)
 
   const llm = await callModel(url, page.text)
   if (!llm.ok) {
-    console.error('[extract] LLM failed:', llm.error)
+    if (DEBUG) console.error('[extract] LLM failed:', llm.error)
     return c.json({ error: llm.error })
   }
 

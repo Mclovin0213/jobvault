@@ -69,3 +69,4 @@ skips the prefill. See [AI_PROVIDERS.md](AI_PROVIDERS.md) for the full matrix.
 |---|---|---|
 | `PORT` | `3000` | HTTP listen port. |
 | `NODE_ENV` | _unset_ | Set to `production` for a real deployment — enables the `ALLOW_NO_AUTH` guard and the `secure` cookie flag. |
+| `DEBUG_EXTRACT` | _unset_ | Set to `true` to enable verbose `/api/extract` logging (fetched URL, LLM raw output, parse-failure details). Off by default — leaving it off avoids logging user-supplied URLs and signed-in emails in production. |

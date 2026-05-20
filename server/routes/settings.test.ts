@@ -12,8 +12,29 @@ vi.mock('../lib/db.ts', () => ({
 }))
 
 vi.mock('../lib/session.ts', () => ({
-  readSessionUser: async () => null,
-  getAppSession: async () => ({ user: null }),
+  getAppSession: async () => ({ userId: 'u-1' }),
+  saveAppSession: async () => {},
+  destroyAppSession: () => {},
+}))
+
+vi.mock('../lib/users.ts', () => ({
+  countUsers: async () => 1,
+  findUserById: async (id: string) =>
+    id === 'u-1'
+      ? {
+          id: 'u-1',
+          email: 'a@b.com',
+          passwordHash: 'scrypt$x$y$z$AA==$BB==',
+          displayName: 'A',
+          role: 'admin' as const,
+          createdAt: 0,
+        }
+      : null,
+  findUserByEmail: async () => null,
+  createUser: async () => {
+    throw new Error('not used')
+  },
+  verifyUserPassword: async () => null,
 }))
 
 vi.mock('ai', () => ({
@@ -40,7 +61,6 @@ beforeEach(() => {
   adapter = memoryAdapter()
   genText = async () => ({ text: 'OK' })
   _resetRateLimitForTests()
-  delete process.env.AUTH_MODE
   delete process.env.AI_PROVIDER
   delete process.env.AI_MODEL
   delete process.env.AI_BASE_URL

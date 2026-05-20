@@ -12,6 +12,56 @@
 
 ---
 
+## Progress (handoff snapshot — 2026-05-20)
+
+**Branch:** `feat/self-host-onboarding` (off `main` at `4c61c78`).
+**Last commit:** `6e1023a refactor(auth): requireUser uses local DB lookup, drops AUTH_MODE`.
+
+### Completed
+
+- ✅ **Task 1** — schema + migration `0002_local_auth.sql`. Drizzle-kit refused to generate (needed TTY for an "is this a rename?" prompt), so the migration + snapshot + journal were written by hand following `0001`'s format. Initial commit shipped a 2025 `when` timestamp older than `0001`'s — code review caught it as Critical (the bun-sqlite migrator would silently skip the migration on existing installs). Fixed in follow-up commits: `7ce8b4c` (bump timestamp) and `d505538` (replace placeholder snapshot UUID).
+- ✅ **Task 2** — `server/lib/password.ts` + tests (4/4 pass). Follow-up commit `e5241b2` corrected a misleading `MAXMEM` comment ("headroom above node's default" — actually below it; it's an explicit ceiling).
+- ✅ **Task 3** — `DataAdapter` user CRUD + SqliteDataAdapter + memoryAdapter. **Plan gap caught by code review:** `src/storage/rest/adapter.ts` had to gain throw-stubs for the new user methods (it can't implement them — browser-side). Fixed in `3db6683`, applying the same throw-stub pattern already used for AI settings and the removed allowlist method. **Update the plan when picking up later tasks if RestDataAdapter is mentioned again** — it now has user-CRUD stubs.
+- ✅ **Task 4** — `server/lib/users.ts` + tests (6/6 pass). Verbatim plan source. No changes needed.
+- ✅ **Task 5** — `session.ts` refactored to `{ userId }` payload, OAuth state helpers dropped. Verbatim plan source. Follow-up commit `ec0670d` cleaned up lint errors caused by the Task 3 throw-stub params (eslint's default `no-unused-vars` doesn't respect `_` prefix; we omit the param entirely, matching the existing pattern in the file).
+- ✅ **Task 6** — `requireUser.ts` rewritten + `auth.user.uid` → `auth.user.id` in `applications.ts` and `pending.ts` (3 call sites total — `pending.ts` has two, plan said one). Lint clean.
+
+### In progress / next up
+
+- ⏳ **Task 7** — `routes/auth.ts` rewrite + new `auth.test.ts`. Task was marked in_progress but the implementer was not dispatched. Pick up here.
+
+### Pending
+
+- Task 8 — bootstrap module (TDD)
+- Task 9 — wire bootstrap into server entry
+- Task 10 — delete OAuth + allowlist; fix `handlers.test.ts`
+- Task 11 — drop allowlist refs from sqlite adapter test (2 tests in `src/storage/sqlite/adapter.test.ts` currently fail referencing the removed `listAllowedEmails` — expected mid-stream)
+- Task 12 — extract `SettingsForm`
+- Task 13 — rewrite `useAuth` + delete `src/auth/`
+- Task 14 — Login page
+- Task 15 — Setup page
+- Task 16 — AuthGate rewrite
+- Task 17 — App.tsx + Nav.tsx use `AuthUser`
+- Task 18 — manual end-to-end smoke test
+- Task 19 — docs + env + Docker
+
+### Known mid-stream state
+
+These will be resolved by Tasks 7–11; do not "fix" them inside earlier tasks:
+
+- `bun run build` is **red**: `server/lib/allowlist.ts` references the removed `listAllowedEmails`, and `server/routes/auth.ts` + `server/routes/handlers.test.ts` still reference deleted session helpers / OAuth code. Tasks 7 and 10 fix these.
+- `bun run test src/storage/sqlite/adapter.test.ts` has 2 failures (the stale `listAllowedEmails` tests). Task 11 removes them.
+- `bun run lint` is **clean** as of `6e1023a`.
+
+### Notes for the next agent
+
+- The plan's executor is using `superpowers:subagent-driven-development`: fresh implementer subagent per task → spec review → code quality review → fix loop → next task. Tasks 1–6 each used a sonnet implementer + sonnet reviewer.
+- For Task 7 (and beyond), task tracking is in TaskCreate (`TaskList` shows current state). Tasks 1–6 are marked `completed`; Task 7 is `in_progress`.
+- Each task ends in its own commit. Follow-up fixes from code review go in additional commits, not amend.
+- Branch is not pushed anywhere yet; safe to rebase if needed.
+
+---
+
 ## File Structure
 
 **New files:**

@@ -12,7 +12,7 @@ A polished, **self-hostable**, human-in-the-loop job-application tracker. Paste 
 ## Screenshots
 
 <!-- GitHub renders this <video> tag inline on the rendered README page. -->
-<video src="https://github.com/Mclovin0213/jobvault/raw/main/docs/screenshots/demo.mp4" controls autoplay muted loop playsinline width="100%"></video>
+<video src="https://github.com/user-attachments/assets/9f8fe38c-faa3-469e-b9b1-678b18b4e2a0" controls autoplay muted loop playsinline width="100%"></video>
 
 | Dashboard | Applications | Kanban |
 |---|---|---|

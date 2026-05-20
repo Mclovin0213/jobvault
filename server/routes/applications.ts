@@ -26,7 +26,7 @@ app.post('/', async c => {
   if (!parsed.ok) return parsed.response
   const created = await (await getAdapter()).createApplication({
     ...parsed.data,
-    addedBy: auth.user.uid,
+    addedBy: auth.user.id,
     addedByName: auth.user.displayName,
   })
   return c.json(created, 201)

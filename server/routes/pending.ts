@@ -26,7 +26,7 @@ app.post('/', async c => {
   const stamped = parsed.data.map(p => ({
     ...p,
     hostname: hostnameOf(p.url),
-    addedBy: auth.user.uid,
+    addedBy: auth.user.id,
     addedByName: auth.user.displayName,
   }))
   const created = await (await getAdapter()).createPendingUrls(stamped)
@@ -66,7 +66,7 @@ app.post('/:id/approve', async c => {
   const body = parsed.data
   const application = {
     ...body,
-    addedBy: auth.user.uid,
+    addedBy: auth.user.id,
     addedByName: auth.user.displayName,
     appliedAt: body.appliedAt ?? (body.status === 'applied' ? Date.now() : null),
   }

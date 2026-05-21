@@ -1,8 +1,8 @@
 import { desc, eq } from 'drizzle-orm'
 import type { AiSettingsRow, Application, PendingUrl } from '@/types'
-import type { DataAdapter, NewApplication, NewPendingUrl } from '../adapter'
+import type { DataAdapter, NewApplication, NewLocalUser, NewPendingUrl, StoredLocalUser } from '../adapter'
 import type { Db } from './client'
-import { aiSettings, allowlist, applications, pendingUrls } from './schema'
+import { aiSettings, applications, pendingUrls, users } from './schema'
 
 const AI_SETTINGS_ID = 'singleton'
 
@@ -41,6 +41,18 @@ function rowToPending(r: PendingRow): PendingUrl {
     extractError: r.extractError,
     addedBy: r.addedBy,
     addedByName: r.addedByName,
+    createdAt: r.createdAt,
+  }
+}
+
+type UserRow = typeof users.$inferSelect
+
+function rowToUser(r: UserRow): StoredLocalUser {
+  return {
+    id: r.id,
+    username: r.username,
+    passwordHash: r.passwordHash,
+    role: r.role,
     createdAt: r.createdAt,
   }
 }
@@ -161,9 +173,58 @@ export class SqliteDataAdapter implements DataAdapter {
     return rowToApp(row as AppRow)
   }
 
-  async listAllowedEmails(): Promise<string[]> {
-    const rows = await this.db.select({ email: allowlist.email }).from(allowlist)
-    return rows.map(r => r.email)
+  async countUsers(): Promise<number> {
+    const rows = await this.db.select({ id: users.id }).from(users)
+    return rows.length
+  }
+
+  async findUserById(id: string): Promise<StoredLocalUser | null> {
+    const rows = await this.db.select().from(users).where(eq(users.id, id)).limit(1)
+    const r = rows[0]
+    return r ? rowToUser(r) : null
+  }
+
+  async findUserByUsername(username: string): Promise<StoredLocalUser | null> {
+    const normalized = username.trim().toLowerCase()
+    const rows = await this.db.select().from(users).where(eq(users.username, normalized)).limit(1)
+    const r = rows[0]
+    return r ? rowToUser(r) : null
+  }
+
+  async createUser(input: NewLocalUser): Promise<StoredLocalUser> {
+    const row: typeof users.$inferInsert = {
+      id: crypto.randomUUID(),
+      username: input.username.trim().toLowerCase(),
+      passwordHash: input.passwordHash,
+      role: input.role,
+      createdAt: Date.now(),
+    }
+    await this.db.insert(users).values(row)
+    return rowToUser(row as typeof users.$inferSelect)
+  }
+
+  async createInitialUser(input: NewLocalUser): Promise<StoredLocalUser> {
+    const row: typeof users.$inferInsert = {
+      id: crypto.randomUUID(),
+      username: input.username.trim().toLowerCase(),
+      passwordHash: input.passwordHash,
+      role: input.role,
+      createdAt: Date.now(),
+    }
+    this.db.transaction(
+      tx => {
+        // BEGIN IMMEDIATE acquires the SQLite write lock up front, so a
+        // concurrent setup request will be serialized behind us instead of
+        // racing past the count check.
+        const existing = tx.select({ id: users.id }).from(users).limit(1).all()
+        if (existing.length > 0) {
+          throw new Error('setup_already_complete')
+        }
+        tx.insert(users).values(row).run()
+      },
+      { behavior: 'immediate' },
+    )
+    return rowToUser(row as typeof users.$inferSelect)
   }
 
   async getAiSettings(): Promise<AiSettingsRow | null> {

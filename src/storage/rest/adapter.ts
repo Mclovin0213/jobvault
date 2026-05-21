@@ -1,5 +1,10 @@
 import type { AiSettingsRow, Application, PendingUrl } from '@/types'
-import type { DataAdapter, NewApplication, NewPendingUrl } from '../adapter'
+import type {
+  DataAdapter,
+  NewApplication,
+  NewPendingUrl,
+  StoredLocalUser,
+} from '../adapter'
 import { apiFetch } from './client'
 
 function stripHostname<T extends { hostname?: string }>(input: T): Omit<T, 'hostname'> {
@@ -59,8 +64,26 @@ export class RestDataAdapter implements DataAdapter {
     })
   }
 
-  async listAllowedEmails(): Promise<string[]> {
-    throw new Error('listAllowedEmails is server-only')
+  // User CRUD flows through the dedicated /api/auth/* endpoints
+  // (src/hooks/useAuth.ts), not the storage adapter.
+  async countUsers(): Promise<number> {
+    throw new Error('countUsers is server-only')
+  }
+
+  async findUserById(): Promise<StoredLocalUser | null> {
+    throw new Error('findUserById is server-only')
+  }
+
+  async findUserByUsername(): Promise<StoredLocalUser | null> {
+    throw new Error('findUserByUsername is server-only')
+  }
+
+  async createUser(): Promise<StoredLocalUser> {
+    throw new Error('createUser is server-only')
+  }
+
+  async createInitialUser(): Promise<StoredLocalUser> {
+    throw new Error('createInitialUser is server-only')
   }
 
   // AI settings flow through the dedicated /api/settings/* endpoints

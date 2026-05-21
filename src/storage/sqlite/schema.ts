@@ -39,8 +39,11 @@ export const pendingUrls = sqliteTable('pending_urls', {
   createdAt: integer('created_at').notNull(),
 })
 
-export const allowlist = sqliteTable('allowlist', {
-  email: text('email').primaryKey(),
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  username: text('username').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role').$type<'admin'>().notNull().default('admin'),
   createdAt: integer('created_at').notNull(),
 })
 

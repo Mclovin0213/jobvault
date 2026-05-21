@@ -7,7 +7,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { SqliteDataAdapter } from './adapter'
 import * as schema from './schema'
 import type { Db } from './client'
-import type { NewApplication, NewPendingUrl } from '../adapter'
+import type { NewApplication, NewLocalUser, NewPendingUrl } from '../adapter'
 import type { ExtractedFields } from '@/types'
 
 // Tests run under Node-based vitest, where `bun:sqlite` is unavailable.
@@ -19,6 +19,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const MIGRATIONS = [
   resolve(__dirname, 'migrations/0000_faulty_bloodscream.sql'),
   resolve(__dirname, 'migrations/0001_acoustic_corsair.sql'),
+  resolve(__dirname, 'migrations/0002_local_auth.sql'),
+  resolve(__dirname, 'migrations/0003_rename_email_to_username.sql'),
 ]
 
 async function applyMigrations(client: Database.Database) {
@@ -60,6 +62,15 @@ function newApp(overrides: Partial<NewApplication> = {}): NewApplication {
     appliedAt: null,
     addedBy: 'u1',
     addedByName: 'User One',
+    ...overrides,
+  }
+}
+
+function newUser(overrides: Partial<NewLocalUser> = {}): NewLocalUser {
+  return {
+    username: 'admin',
+    passwordHash: 'scrypt$1$AAAA$BBBB',
+    role: 'admin',
     ...overrides,
   }
 }
@@ -183,18 +194,6 @@ describe('SqliteDataAdapter', () => {
     expect(await adapter.listApplications()).toEqual([])
   })
 
-  it('listAllowedEmails returns empty when table is empty', async () => {
-    expect(await adapter.listAllowedEmails()).toEqual([])
-  })
-
-  it('listAllowedEmails returns seeded rows', async () => {
-    client
-      .prepare('insert into allowlist (email, created_at) values (?, ?), (?, ?)')
-      .run('a@x.com', Date.now(), 'b@y.com', Date.now())
-    const list = await adapter.listAllowedEmails()
-    expect(list.sort()).toEqual(['a@x.com', 'b@y.com'])
-  })
-
   it('approvePending called twice with same id only inserts once', async () => {
     const [pending] = await adapter.createPendingUrls([newPending()])
 
@@ -202,6 +201,49 @@ describe('SqliteDataAdapter', () => {
     await expect(adapter.approvePending(pending.id, newApp())).rejects.toThrow(/pending_not_found/)
 
     expect(await adapter.listApplications()).toHaveLength(1)
+  })
+
+  describe('user persistence', () => {
+    it('createUser round-trips and normalizes username to lowercase', async () => {
+      const u = await adapter.createUser(newUser({ username: '  Alex_01 ' }))
+      expect(u.id).toMatch(/^[0-9a-f-]{36}$/)
+      expect(u.username).toBe('alex_01')
+      expect(u.role).toBe('admin')
+      expect(typeof u.createdAt).toBe('number')
+
+      expect(await adapter.countUsers()).toBe(1)
+      const byId = await adapter.findUserById(u.id)
+      expect(byId?.username).toBe('alex_01')
+      expect(byId?.passwordHash).toBe('scrypt$1$AAAA$BBBB')
+    })
+
+    it('findUserByUsername matches case-insensitively', async () => {
+      await adapter.createUser(newUser({ username: 'alex' }))
+      const found = await adapter.findUserByUsername('ALEX')
+      expect(found?.username).toBe('alex')
+      expect(await adapter.findUserByUsername('nobody')).toBeNull()
+    })
+
+    it('findUserById returns null for unknown id', async () => {
+      expect(await adapter.findUserById('does-not-exist')).toBeNull()
+    })
+
+    it('createUser rejects duplicate usernames via the unique index', async () => {
+      await adapter.createUser(newUser({ username: 'dup' }))
+      await expect(adapter.createUser(newUser({ username: 'DUP' }))).rejects.toThrow()
+      expect(await adapter.countUsers()).toBe(1)
+    })
+
+    it('createInitialUser inserts when empty and throws once any user exists', async () => {
+      const first = await adapter.createInitialUser(newUser({ username: 'first' }))
+      expect(first.username).toBe('first')
+      expect(await adapter.countUsers()).toBe(1)
+
+      await expect(
+        adapter.createInitialUser(newUser({ username: 'second' })),
+      ).rejects.toThrow(/setup_already_complete/)
+      expect(await adapter.countUsers()).toBe(1)
+    })
   })
 
   it('getAiSettings returns null until set, then upserts a single row', async () => {

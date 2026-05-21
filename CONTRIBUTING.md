@@ -27,9 +27,11 @@ bun install
 bun run dev          # vite :5173 + bun --watch server :3000
 ```
 
-No config is needed for solo dev — the default `AUTH_MODE=none` gives you a
-synthetic local user and `data/app.db` is created on first boot. Copy
-`.env.example` to `.env.local` only if you want to exercise OAuth or AI extract.
+Set `SESSION_SECRET` (any 32+ char string) in `.env.local` before first run;
+the server requires it. On first page load you'll see an in-app setup form
+that creates the admin user. `data/app.db` is created on boot. Copy
+`.env.example` to `.env.local` and fill in AI provider keys only if you want
+to exercise the extract path.
 
 ## Before you open a PR
 

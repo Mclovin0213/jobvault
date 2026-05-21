@@ -27,8 +27,7 @@ services:
     volumes:
       - ./data:/app/data        # SQLite lives here — back this up
     environment:
-      AUTH_MODE: none           # single-user, no login
-      ALLOW_NO_AUTH: "true"     # required for no-auth in production
+      SESSION_SECRET: ${SESSION_SECRET}   # required; openssl rand -base64 48
     restart: unless-stopped
 ```
 
@@ -36,7 +35,40 @@ services:
 docker compose up -d
 ```
 
-Open <http://localhost:3000>. The DB is created and migrated on first boot. For a shared deployment, switch on Google OAuth — see [Self-hosting](docs/SELF_HOSTING.md).
+Open <http://localhost:3000>. The DB is created and migrated on first boot.
+
+## First run
+
+1. Start the app (Docker above, or `bun install && SESSION_SECRET=$(openssl rand -base64 48) bun run start`).
+2. Open <http://localhost:3000>. You'll see a one-time setup form — pick a username (3-32 characters) and a password (12+ characters). That account becomes the admin.
+3. Optionally configure an AI provider in step 2 of the setup, or skip and set it up later under **Settings**.
+
+### Headless / declarative bootstrap
+
+If you'd rather not visit a browser to set up, pass both env vars at first start and the admin will be created automatically:
+
+```bash
+docker run \
+  -p 3000:3000 \
+  -v ./data:/app/data \
+  -e SESSION_SECRET=$(openssl rand -base64 48) \
+  -e ADMIN_USERNAME=admin \
+  -e ADMIN_PASSWORD='a-long-passphrase-or-random-string' \
+  ghcr.io/mclovin0213/jobvault:latest
+```
+
+These env vars are only read when the database is empty — they don't override an existing user, and they're safe to leave in your compose file after setup.
+
+### Lost the admin password?
+
+There's no password-reset flow (Jobvault is self-hosted and doesn't ship an SMTP integration). Recover by clearing the users table and re-running setup:
+
+```bash
+docker compose exec app sqlite3 /app/data/app.db 'DELETE FROM users;'
+docker compose restart app
+```
+
+Your applications and pending URLs are untouched.
 
 ## Quickstart — from source
 
@@ -45,10 +77,10 @@ git clone https://github.com/Mclovin0213/jobvault.git
 cd jobvault
 bun install
 bun run build
-bun run start
+SESSION_SECRET=$(openssl rand -base64 48) bun run start
 ```
 
-Open <http://localhost:3000>. No env file needed for local single-user use — the default `AUTH_MODE=none` gives you a synthetic local user and `data/app.db` is created on first boot with all migrations auto-applied.
+Open <http://localhost:3000> and complete the one-time setup. `data/app.db` is created on first boot with all migrations auto-applied.
 
 For development with hot reload:
 
@@ -67,7 +99,7 @@ Vite proxies `/api/*` to the Bun server, so you can use either port during dev.
 - **Applications grid** with search, chip filters, group-by (status / source / month-added), sort-by (date added / applied / deadline / company). Two-tier rows: compact-by-default, click to expand for inline edits.
 - **Pending queue** to triage before promoting to a tracked application.
 - **Dashboard** — streak, applied-today, funnel, weekday heatmap, source / contributor breakdowns. All computed client-side from a single source of truth.
-- **Multi-user-ready** — optional Google OAuth + allowlist for shared deployments. Default is single-user no-auth.
+- **Self-host first** — username/password auth backed by local SQLite, set up in-app on first run or via `ADMIN_USERNAME`/`ADMIN_PASSWORD` env vars for headless deploys. Sessions are sealed cookies (iron-session); passwords are scrypt-hashed.
 
 ## Documentation
 

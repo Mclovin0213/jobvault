@@ -1,5 +1,11 @@
 import type { AiSettingsRow, Application, PendingUrl } from '@/types'
-import type { DataAdapter, NewApplication, NewPendingUrl } from '@/storage/adapter'
+import type {
+  DataAdapter,
+  NewApplication,
+  NewLocalUser,
+  NewPendingUrl,
+  StoredLocalUser,
+} from '@/storage/adapter'
 
 let nextId = 1
 function id(): string {
@@ -7,10 +13,10 @@ function id(): string {
   return `id_${nextId}`
 }
 
-export function memoryAdapter(initial: { allowedEmails?: string[] } = {}): DataAdapter {
+export function memoryAdapter(initial: { users?: StoredLocalUser[] } = {}): DataAdapter {
   const apps: Application[] = []
   const pendings: PendingUrl[] = []
-  const allowedEmails = (initial.allowedEmails ?? []).slice()
+  const users: StoredLocalUser[] = (initial.users ?? []).slice()
   let aiSettings: AiSettingsRow | null = null
 
   return {
@@ -59,8 +65,44 @@ export function memoryAdapter(initial: { allowedEmails?: string[] } = {}): DataA
       apps.push(app)
       return app
     },
-    async listAllowedEmails() {
-      return allowedEmails.slice()
+    async countUsers() {
+      return users.length
+    },
+    async findUserById(userId) {
+      return users.find(u => u.id === userId) ?? null
+    },
+    async findUserByUsername(username) {
+      const t = username.trim().toLowerCase()
+      return users.find(u => u.username === t) ?? null
+    },
+    async createUser(input: NewLocalUser) {
+      const username = input.username.trim().toLowerCase()
+      if (users.some(u => u.username === username)) {
+        throw new Error('user_username_taken')
+      }
+      const user: StoredLocalUser = {
+        id: id(),
+        username,
+        passwordHash: input.passwordHash,
+        role: input.role,
+        createdAt: Date.now(),
+      }
+      users.push(user)
+      return user
+    },
+    async createInitialUser(input: NewLocalUser) {
+      if (users.length > 0) {
+        throw new Error('setup_already_complete')
+      }
+      const user: StoredLocalUser = {
+        id: id(),
+        username: input.username.trim().toLowerCase(),
+        passwordHash: input.passwordHash,
+        role: input.role,
+        createdAt: Date.now(),
+      }
+      users.push(user)
+      return user
     },
     async getAiSettings() {
       return aiSettings ? { ...aiSettings } : null

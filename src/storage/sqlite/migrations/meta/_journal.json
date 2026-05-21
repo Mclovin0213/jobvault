@@ -15,6 +15,20 @@
       "when": 1778963737729,
       "tag": "0001_acoustic_corsair",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779317004132,
+      "tag": "0002_local_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1779500000000,
+      "tag": "0003_rename_email_to_username",
+      "breakpoints": true
     }
   ]
 }

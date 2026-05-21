@@ -35,20 +35,22 @@ Route handlers are thin: `requireUser(c)` → `parseBody(c, schema)` → `getAda
 
 ### Auth (`server/lib/`)
 
-`requireUser(c)` returns either the synthetic local user (`AUTH_MODE=none`) or a session-validated OAuth user. In production with `AUTH_MODE=none`, the server returns 503 on every request unless `ALLOW_NO_AUTH=true` is explicit — fail-closed by design.
+Local username/password auth backed by SQLite. `requireUser(c)` reads the sealed session cookie, looks up the user id, and returns the row or 401. There is no OAuth, no allowlist, no `AUTH_MODE` env var. The `users` table key is `username` (3-32 chars, `[a-zA-Z0-9._-]`, case-insensitive) — no email, no separate display name.
 
-`server/lib/session.ts` uses iron-session's `sealData`/`unsealData` directly with `hono/cookie`. Two cookies: `app_session` (30d) and `oauth_state` (10m).
+The first user is created via `POST /api/auth/setup`, which is gated on `countUsers() === 0` and returns 410 once any user exists. For Docker/CI, `ADMIN_USERNAME` + `ADMIN_PASSWORD` env vars seed the admin at startup when the DB is empty (`server/lib/bootstrap.ts`).
 
-Allowlist policy in `server/lib/allowlist.ts`: env `ALLOWLIST` wins (empty = anyone signed in); else SQL `allowlist` table (empty = anyone signed in). Case-insensitive.
+Passwords are hashed with `node:crypto` scrypt (`server/lib/password.ts`). Sessions remain iron-session sealed cookies (`server/lib/session.ts`); payload is just `{ userId }`.
+
+`GET /api/auth/me` returns one of `{ status: 'needs-setup' }`, `{ status: 'signed-out' }`, `{ status: 'signed-in', user }`. The SPA's `useAuth` hook branches off that.
 
 ### AI providers (`server/lib/aiProviders.ts` + `aiConfig.ts`)
 
-`AI_PROVIDERS` registry is the single integration point (OpenAI, Anthropic, Google, MiniMax, OpenRouter, generic OpenAI-compatible). `resolveAiConfig()` follows the **same env-wins / DB-fallback policy as `allowlist.ts`**: `AI_PROVIDER` (or legacy bare `MINIMAX_API_KEY`) env wins; otherwise the single-row `ai_settings` table set via the Settings page. Both `routes/extract.ts` and `routes/settings.ts` (`/api/settings/ai{,/test}`) go through the registry. Keys are plaintext in `data/app.db` (trust model) and **never returned to the browser** — only a masked `••••last4` preview. Custom base URL applies only to `openai-compatible` (hosted providers ignore it, so a stale local endpoint can't leak across a provider switch); a provider with no `defaultModel` isn't `ready` until a model id is set. See `docs/AI_PROVIDERS.md`.
+`AI_PROVIDERS` registry is the single integration point (OpenAI, Anthropic, Google, MiniMax, OpenRouter, generic OpenAI-compatible). `resolveAiConfig()` follows an env-wins / DB-fallback policy: `AI_PROVIDER` (or legacy bare `MINIMAX_API_KEY`) env wins; otherwise the single-row `ai_settings` table set via the Settings page. Both `routes/extract.ts` and `routes/settings.ts` (`/api/settings/ai{,/test}`) go through the registry. Keys are plaintext in `data/app.db` (trust model) and **never returned to the browser** — only a masked `••••last4` preview. Custom base URL applies only to `openai-compatible` (hosted providers ignore it, so a stale local endpoint can't leak across a provider switch); a provider with no `defaultModel` isn't `ready` until a model id is set. See `docs/AI_PROVIDERS.md`.
 
 ### Frontend (`src/`)
 
 - **One Drizzle schema, two reads**: `useApplications` / `usePendingUrls` poll `GET /api/applications` and `GET /api/pending` every 5s, pause while `document.hidden`. Writes are optimistic with per-row rollback + `toast.error` on failure. Don't snapshot the whole array for rollback — splice the affected row back in by id (or original index for removals/approves) so concurrent edits, new rows, and polled changes don't get wiped.
-- `useAuth` reads `GET /api/auth/me` (200 → `allowed`, anything else → `signed-out`). `/api/auth/me` delegates to `requireUser` so its policy matches every other endpoint.
+- `useAuth` reads `GET /api/auth/me` and branches on `status` (`needs-setup` → Setup wizard, `signed-out` → Login page, `signed-in` → app). `AuthGate` renders the right shell.
 - **Routing**: hash-based, no router lib. Tabs in `src/components/Nav.tsx`, view state in `App.tsx`.
 - **Pages** in `src/pages/`: `Dashboard`, `Applications`, `Kanban`, `Pending`, `AddLinks`.
 - **Server-stamped `appliedAt`** — `server/routes/applications.ts` auto-stamps when status flips to `applied`. Client no longer stamps.

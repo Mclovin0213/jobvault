@@ -1,5 +1,5 @@
 import { LogOut, Moon, Sun } from 'lucide-react'
-import type { StoredUser } from '@/auth/adapter'
+import type { AuthUser } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -25,7 +25,7 @@ export function Nav({
 }: {
   view: View
   onView: (v: View) => void
-  user: StoredUser | null
+  user: AuthUser | null
   onSignOut: () => void
   dark: boolean
   onToggleDark: () => void
@@ -75,7 +75,7 @@ export function Nav({
             {user ? (
               <div className="flex items-center gap-2">
                 <span className="hidden text-xs text-[var(--color-muted-foreground)] sm:inline">
-                  {user.displayName ?? user.email}
+                  {user.username}
                 </span>
                 <Button variant="ghost" size="icon" onClick={onSignOut} title="Sign out">
                   <LogOut className="size-4" />

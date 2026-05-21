@@ -213,7 +213,7 @@ app.post('/', async c => {
   // Pending CRUD is cheap local SQLite bookkeeping and must NOT share this
   // budget, or normal use (~1 + 3 writes per link) exhausts 20/5min after a
   // handful of links and wedges rows on "extracting".
-  const limit = rateLimit(`extract:${auth.user.email}`)
+  const limit = rateLimit(`extract:${auth.user.username}`)
   if (!limit.ok) {
     c.header('Retry-After', String(limit.retryAfterSec))
     return c.json({ error: 'rate_limited', retryAfterSec: limit.retryAfterSec }, 429)

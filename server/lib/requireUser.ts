@@ -1,40 +1,16 @@
 import type { Context } from 'hono'
-import type { StoredUser } from '../../src/auth/adapter.ts'
-import { readSessionUser } from './session.ts'
-import { isAllowed } from './allowlist.ts'
+import type { StoredLocalUser } from '@/storage/adapter'
+import { getAppSession } from './session.ts'
+import { findUserById } from './users.ts'
 
 export type UserResult =
-  | { ok: true; user: StoredUser }
-  | { ok: false; status: 401 | 403 | 500 | 503; error: string }
-
-const LOCAL_USER: StoredUser = {
-  uid: 'local',
-  email: 'local@self-host',
-  displayName: 'Local User',
-}
-
-function noAuthAllowed(): boolean {
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.ALLOW_NO_AUTH === 'true'
-  }
-  return true
-}
+  | { ok: true; user: StoredLocalUser }
+  | { ok: false; status: 401; error: 'unauthenticated' }
 
 export async function requireUser(c: Context): Promise<UserResult> {
-  const mode = (process.env.AUTH_MODE || 'none').toLowerCase()
-  if (mode === 'none') {
-    if (!noAuthAllowed()) {
-      return { ok: false, status: 503, error: 'auth_not_configured' }
-    }
-    return { ok: true, user: LOCAL_USER }
-  }
-  if (mode === 'oauth') {
-    const user = await readSessionUser(c)
-    if (!user) return { ok: false, status: 401, error: 'unauthenticated' }
-    if (!(await isAllowed(user.email))) {
-      return { ok: false, status: 403, error: 'not_allowed' }
-    }
-    return { ok: true, user }
-  }
-  return { ok: false, status: 500, error: `unknown_auth_mode:${mode}` }
+  const session = await getAppSession(c)
+  if (!session.userId) return { ok: false, status: 401, error: 'unauthenticated' }
+  const user = await findUserById(session.userId)
+  if (!user) return { ok: false, status: 401, error: 'unauthenticated' }
+  return { ok: true, user }
 }

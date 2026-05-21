@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Toaster } from 'sonner'
-import type { StoredUser } from '@/auth/adapter'
+import type { AuthUser } from '@/hooks/useAuth'
 import { useAuth } from '@/hooks/useAuth'
 import { useApplications } from '@/hooks/useApplications'
 import { usePendingUrls } from '@/hooks/usePendingUrls'
@@ -45,7 +45,7 @@ function AppShell({
   dark,
   onToggleDark,
 }: {
-  user: StoredUser
+  user: AuthUser
   onSignOut: () => void
   dark: boolean
   onToggleDark: () => void

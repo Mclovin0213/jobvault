@@ -17,7 +17,7 @@ app.get('/', async c => {
 app.post('/', async c => {
   const auth = await requireUser(c)
   if (!auth.ok) return c.json({ error: auth.error }, auth.status)
-  const limit = rateLimit(auth.user.email)
+  const limit = rateLimit(auth.user.username)
   if (!limit.ok) {
     c.header('Retry-After', String(limit.retryAfterSec))
     return c.json({ error: 'rate_limited', retryAfterSec: limit.retryAfterSec }, 429)
@@ -26,8 +26,8 @@ app.post('/', async c => {
   if (!parsed.ok) return parsed.response
   const created = await (await getAdapter()).createApplication({
     ...parsed.data,
-    addedBy: auth.user.uid,
-    addedByName: auth.user.displayName,
+    addedBy: auth.user.id,
+    addedByName: auth.user.username,
   })
   return c.json(created, 201)
 })
@@ -36,7 +36,7 @@ app.patch('/:id', async c => {
   const auth = await requireUser(c)
   if (!auth.ok) return c.json({ error: auth.error }, auth.status)
   const id = c.req.param('id')
-  const limit = rateLimit(auth.user.email)
+  const limit = rateLimit(auth.user.username)
   if (!limit.ok) {
     c.header('Retry-After', String(limit.retryAfterSec))
     return c.json({ error: 'rate_limited', retryAfterSec: limit.retryAfterSec }, 429)
@@ -60,7 +60,7 @@ app.delete('/:id', async c => {
   const auth = await requireUser(c)
   if (!auth.ok) return c.json({ error: auth.error }, auth.status)
   const id = c.req.param('id')
-  const limit = rateLimit(auth.user.email)
+  const limit = rateLimit(auth.user.username)
   if (!limit.ok) {
     c.header('Retry-After', String(limit.retryAfterSec))
     return c.json({ error: 'rate_limited', retryAfterSec: limit.retryAfterSec }, 429)

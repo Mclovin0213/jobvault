@@ -6,6 +6,38 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-21
+
+Self-host onboarding: Jobvault now ships its own local authentication instead
+of depending on Google OAuth, so a fresh clone is usable with nothing but
+`bun install && bun run start`.
+
+### Added
+- **Local username/password authentication.** First run shows a two-step
+  setup wizard (admin account + optional AI provider); subsequent visits show
+  a login page. `GET /api/auth/me` drives a `needs-setup` / `signed-out` /
+  `signed-in` state machine consumed by the new `useAuth` hook and `AuthGate`.
+  Passwords are hashed with `node:crypto` scrypt; sessions stay iron-session
+  sealed cookies.
+- **Headless admin bootstrap.** Setting `ADMIN_USERNAME` + `ADMIN_PASSWORD`
+  seeds the admin at startup when the database is empty — useful for Docker /
+  CI deploys that skip the interactive wizard.
+- **Configurable minimum password length.** `MIN_PASSWORD_LENGTH` raises the
+  required password length for setup and `ADMIN_PASSWORD`. There is no
+  minimum by default.
+
+### Changed
+- **Identity is now `username`** (3-32 chars, `[a-zA-Z0-9._-]`, case-insensitive)
+  rather than email — no separate display name.
+- Initial user creation is atomic, closing a first-run race where concurrent
+  `POST /api/auth/setup` requests could both succeed.
+- `requireUser` resolves the session to a local DB row; the `AUTH_MODE` env
+  var is gone.
+
+### Removed
+- Google OAuth and the email allowlist. Jobvault is single-user / trust-based;
+  there is no OAuth, no allowlist, and no `AUTH_MODE`.
+
 ## [0.2.1] - 2026-05-20
 
 ### Security
@@ -85,7 +117,8 @@ Initial OSS release.
   CI, and OSS scaffolding (AGPL-3.0 license, CONTRIBUTING, CODE_OF_CONDUCT,
   SECURITY policy, issue/PR templates).
 
-[Unreleased]: https://github.com/Mclovin0213/jobvault/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Mclovin0213/jobvault/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Mclovin0213/jobvault/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Mclovin0213/jobvault/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Mclovin0213/jobvault/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Mclovin0213/jobvault/compare/v0.1.0...v0.1.1

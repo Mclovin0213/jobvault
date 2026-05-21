@@ -53,7 +53,7 @@ app.post('/ai/test', async c => {
   const auth = await requireUser(c)
   if (!auth.ok) return c.json({ error: auth.error }, auth.status)
 
-  const limit = rateLimit(auth.user.email)
+  const limit = rateLimit(auth.user.username)
   if (!limit.ok) {
     c.header('Retry-After', String(limit.retryAfterSec))
     return c.json({ ok: false, error: 'rate_limited' }, 429)

@@ -35,9 +35,9 @@ Route handlers are thin: `requireUser(c)` → `parseBody(c, schema)` → `getAda
 
 ### Auth (`server/lib/`)
 
-Local email/password auth backed by SQLite. `requireUser(c)` reads the sealed session cookie, looks up the user id, and returns the row or 401. There is no OAuth, no allowlist, no `AUTH_MODE` env var.
+Local username/password auth backed by SQLite. `requireUser(c)` reads the sealed session cookie, looks up the user id, and returns the row or 401. There is no OAuth, no allowlist, no `AUTH_MODE` env var. The `users` table key is `username` (3-32 chars, `[a-zA-Z0-9._-]`, case-insensitive) — no email, no separate display name.
 
-The first user is created via `POST /api/auth/setup`, which is gated on `countUsers() === 0` and returns 410 once any user exists. For Docker/CI, `ADMIN_EMAIL` + `ADMIN_PASSWORD` env vars seed the admin at startup when the DB is empty (`server/lib/bootstrap.ts`).
+The first user is created via `POST /api/auth/setup`, which is gated on `countUsers() === 0` and returns 410 once any user exists. For Docker/CI, `ADMIN_USERNAME` + `ADMIN_PASSWORD` env vars seed the admin at startup when the DB is empty (`server/lib/bootstrap.ts`).
 
 Passwords are hashed with `node:crypto` scrypt (`server/lib/password.ts`). Sessions remain iron-session sealed cookies (`server/lib/session.ts`); payload is just `{ userId }`.
 

@@ -3,9 +3,8 @@ import { getAdapter } from './db.ts'
 import { getDummyHash, hashPassword, verifyPassword } from './password.ts'
 
 export interface CreateUserInput {
-  email: string
+  username: string
   password: string
-  displayName: string
 }
 
 export async function countUsers(): Promise<number> {
@@ -16,15 +15,14 @@ export async function findUserById(id: string): Promise<StoredLocalUser | null> 
   return (await getAdapter()).findUserById(id)
 }
 
-export async function findUserByEmail(email: string): Promise<StoredLocalUser | null> {
-  return (await getAdapter()).findUserByEmail(email)
+export async function findUserByUsername(username: string): Promise<StoredLocalUser | null> {
+  return (await getAdapter()).findUserByUsername(username)
 }
 
 export async function createUser(input: CreateUserInput): Promise<StoredLocalUser> {
   const passwordHash = await hashPassword(input.password)
   return (await getAdapter()).createUser({
-    email: input.email,
-    displayName: input.displayName,
+    username: input.username,
     passwordHash,
     role: 'admin',
   })
@@ -33,18 +31,17 @@ export async function createUser(input: CreateUserInput): Promise<StoredLocalUse
 export async function createInitialUser(input: CreateUserInput): Promise<StoredLocalUser> {
   const passwordHash = await hashPassword(input.password)
   return (await getAdapter()).createInitialUser({
-    email: input.email,
-    displayName: input.displayName,
+    username: input.username,
     passwordHash,
     role: 'admin',
   })
 }
 
 export async function verifyUserPassword(
-  email: string,
+  username: string,
   password: string,
 ): Promise<StoredLocalUser | null> {
-  const user = await findUserByEmail(email)
+  const user = await findUserByUsername(username)
   if (!user) {
     // Spend roughly the same time as a real verify to avoid leaking
     // existence via timing.

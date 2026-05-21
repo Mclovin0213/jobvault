@@ -11,15 +11,13 @@ const { maybeBootstrapAdmin } = await import('./bootstrap')
 
 beforeEach(() => {
   adapter = memoryAdapter()
-  delete process.env.ADMIN_EMAIL
+  delete process.env.ADMIN_USERNAME
   delete process.env.ADMIN_PASSWORD
-  delete process.env.ADMIN_DISPLAY_NAME
 })
 
 afterEach(() => {
-  delete process.env.ADMIN_EMAIL
+  delete process.env.ADMIN_USERNAME
   delete process.env.ADMIN_PASSWORD
-  delete process.env.ADMIN_DISPLAY_NAME
 })
 
 describe('maybeBootstrapAdmin', () => {
@@ -29,45 +27,41 @@ describe('maybeBootstrapAdmin', () => {
   })
 
   it('creates an admin when both env vars are set and DB is empty', async () => {
-    process.env.ADMIN_EMAIL = 'Admin@Example.com'
+    process.env.ADMIN_USERNAME = 'Admin'
     process.env.ADMIN_PASSWORD = 'correct-horse-battery-staple'
     await maybeBootstrapAdmin()
-    const u = await adapter.findUserByEmail('admin@example.com')
+    const u = await adapter.findUserByUsername('admin')
     expect(u).not.toBeNull()
-    expect(u?.displayName).toBe('admin')
-  })
-
-  it('uses ADMIN_DISPLAY_NAME when set', async () => {
-    process.env.ADMIN_EMAIL = 'admin@example.com'
-    process.env.ADMIN_PASSWORD = 'correct-horse-battery-staple'
-    process.env.ADMIN_DISPLAY_NAME = 'Site Owner'
-    await maybeBootstrapAdmin()
-    const u = await adapter.findUserByEmail('admin@example.com')
-    expect(u?.displayName).toBe('Site Owner')
+    expect(u?.username).toBe('admin')
   })
 
   it('does nothing if a user already exists', async () => {
     await adapter.createUser({
-      email: 'someone@else.com',
+      username: 'someone',
       passwordHash: 'scrypt$x$y$z$AA==$BB==',
-      displayName: 'Someone',
       role: 'admin',
     })
-    process.env.ADMIN_EMAIL = 'admin@example.com'
+    process.env.ADMIN_USERNAME = 'admin'
     process.env.ADMIN_PASSWORD = 'correct-horse-battery-staple'
     await maybeBootstrapAdmin()
     expect(await adapter.countUsers()).toBe(1)
-    expect(await adapter.findUserByEmail('admin@example.com')).toBeNull()
+    expect(await adapter.findUserByUsername('admin')).toBeNull()
   })
 
   it('throws if ADMIN_PASSWORD is shorter than 12 chars', async () => {
-    process.env.ADMIN_EMAIL = 'admin@example.com'
+    process.env.ADMIN_USERNAME = 'admin'
     process.env.ADMIN_PASSWORD = 'short'
     await expect(maybeBootstrapAdmin()).rejects.toThrow(/ADMIN_PASSWORD/)
   })
 
+  it('throws if ADMIN_USERNAME is invalid', async () => {
+    process.env.ADMIN_USERNAME = 'no'
+    process.env.ADMIN_PASSWORD = 'correct-horse-battery-staple'
+    await expect(maybeBootstrapAdmin()).rejects.toThrow(/ADMIN_USERNAME/)
+  })
+
   it('throws if only one of the two env vars is set', async () => {
-    process.env.ADMIN_EMAIL = 'admin@example.com'
+    process.env.ADMIN_USERNAME = 'admin'
     await expect(maybeBootstrapAdmin()).rejects.toThrow(/ADMIN_PASSWORD/)
   })
 })

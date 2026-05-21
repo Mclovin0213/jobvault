@@ -50,9 +50,8 @@ type UserRow = typeof users.$inferSelect
 function rowToUser(r: UserRow): StoredLocalUser {
   return {
     id: r.id,
-    email: r.email,
+    username: r.username,
     passwordHash: r.passwordHash,
-    displayName: r.displayName,
     role: r.role,
     createdAt: r.createdAt,
   }
@@ -185,9 +184,9 @@ export class SqliteDataAdapter implements DataAdapter {
     return r ? rowToUser(r) : null
   }
 
-  async findUserByEmail(email: string): Promise<StoredLocalUser | null> {
-    const normalized = email.trim().toLowerCase()
-    const rows = await this.db.select().from(users).where(eq(users.email, normalized)).limit(1)
+  async findUserByUsername(username: string): Promise<StoredLocalUser | null> {
+    const normalized = username.trim().toLowerCase()
+    const rows = await this.db.select().from(users).where(eq(users.username, normalized)).limit(1)
     const r = rows[0]
     return r ? rowToUser(r) : null
   }
@@ -195,9 +194,8 @@ export class SqliteDataAdapter implements DataAdapter {
   async createUser(input: NewLocalUser): Promise<StoredLocalUser> {
     const row: typeof users.$inferInsert = {
       id: crypto.randomUUID(),
-      email: input.email.trim().toLowerCase(),
+      username: input.username.trim().toLowerCase(),
       passwordHash: input.passwordHash,
-      displayName: input.displayName,
       role: input.role,
       createdAt: Date.now(),
     }
@@ -208,9 +206,8 @@ export class SqliteDataAdapter implements DataAdapter {
   async createInitialUser(input: NewLocalUser): Promise<StoredLocalUser> {
     const row: typeof users.$inferInsert = {
       id: crypto.randomUUID(),
-      email: input.email.trim().toLowerCase(),
+      username: input.username.trim().toLowerCase(),
       passwordHash: input.passwordHash,
-      displayName: input.displayName,
       role: input.role,
       createdAt: Date.now(),
     }

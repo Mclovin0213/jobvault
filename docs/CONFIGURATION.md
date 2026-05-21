@@ -12,22 +12,21 @@ The DB is created and migrated on first boot. To wipe: stop the server, delete t
 
 ## Auth
 
-Jobvault uses local email/password auth backed by SQLite. There is no OAuth and no allowlist.
+Jobvault uses local username/password auth backed by SQLite. There is no OAuth and no allowlist.
 
 | Variable | Default | Notes |
 |---|---|---|
 | `SESSION_SECRET` | _empty_ | ≥ 32 chars. Used to seal session cookies. **Required** — the server refuses to start without it. Generate: `openssl rand -base64 48`. |
-| `ADMIN_EMAIL` | _unset_ | Optional. With `ADMIN_PASSWORD`, creates the first admin at boot when the DB is empty. Useful for headless / Docker deploys. |
+| `ADMIN_USERNAME` | _unset_ | Optional. With `ADMIN_PASSWORD`, creates the first admin at boot when the DB is empty. 3-32 chars, letters/numbers/`. _ -`. Useful for headless / Docker deploys. |
 | `ADMIN_PASSWORD` | _unset_ | Optional. Min 12 chars. See above. |
-| `ADMIN_DISPLAY_NAME` | _email local part_ | Optional. Display name for the bootstrapped admin. |
 
 On first run (DB empty, no `ADMIN_*` envs), `GET /api/auth/me` returns `{ status: 'needs-setup' }` and the UI shows a one-time setup form that creates the admin user. Subsequent requests use sealed session cookies.
 
-If you set `ADMIN_EMAIL` + `ADMIN_PASSWORD`, the server creates that user at startup when the DB is empty and skips the in-app setup form. The env vars are ignored once any user exists, so they're safe to leave in your compose file.
+If you set `ADMIN_USERNAME` + `ADMIN_PASSWORD`, the server creates that user at startup when the DB is empty and skips the in-app setup form. The env vars are ignored once any user exists, so they're safe to leave in your compose file.
 
 ### Lost admin password
 
-There's no email-based reset. Recover by clearing the `users` table and re-running setup:
+There's no password-reset flow. Recover by clearing the `users` table and re-running setup:
 
 ```bash
 sqlite3 data/app.db 'DELETE FROM users;'
@@ -63,4 +62,4 @@ skips the prefill. See [AI_PROVIDERS.md](AI_PROVIDERS.md) for the full matrix.
 |---|---|---|
 | `PORT` | `3000` | HTTP listen port. |
 | `NODE_ENV` | _unset_ | Set to `production` for a real deployment — enables the `secure` cookie flag. |
-| `DEBUG_EXTRACT` | _unset_ | Set to `true` to enable verbose `/api/extract` logging (fetched URL, LLM raw output, parse-failure details). Off by default — leaving it off avoids logging user-supplied URLs and signed-in emails in production. |
+| `DEBUG_EXTRACT` | _unset_ | Set to `true` to enable verbose `/api/extract` logging (fetched URL, LLM raw output, parse-failure details). Off by default — leaving it off avoids logging user-supplied URLs and signed-in usernames in production. |

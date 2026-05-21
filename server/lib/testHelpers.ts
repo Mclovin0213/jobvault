@@ -71,20 +71,19 @@ export function memoryAdapter(initial: { users?: StoredLocalUser[] } = {}): Data
     async findUserById(userId) {
       return users.find(u => u.id === userId) ?? null
     },
-    async findUserByEmail(email) {
-      const t = email.trim().toLowerCase()
-      return users.find(u => u.email === t) ?? null
+    async findUserByUsername(username) {
+      const t = username.trim().toLowerCase()
+      return users.find(u => u.username === t) ?? null
     },
     async createUser(input: NewLocalUser) {
-      const email = input.email.trim().toLowerCase()
-      if (users.some(u => u.email === email)) {
-        throw new Error('user_email_taken')
+      const username = input.username.trim().toLowerCase()
+      if (users.some(u => u.username === username)) {
+        throw new Error('user_username_taken')
       }
       const user: StoredLocalUser = {
         id: id(),
-        email,
+        username,
         passwordHash: input.passwordHash,
-        displayName: input.displayName,
         role: input.role,
         createdAt: Date.now(),
       }
@@ -97,9 +96,8 @@ export function memoryAdapter(initial: { users?: StoredLocalUser[] } = {}): Data
       }
       const user: StoredLocalUser = {
         id: id(),
-        email: input.email.trim().toLowerCase(),
+        username: input.username.trim().toLowerCase(),
         passwordHash: input.passwordHash,
-        displayName: input.displayName,
         role: input.role,
         createdAt: Date.now(),
       }

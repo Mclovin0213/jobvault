@@ -18,9 +18,8 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       # Optional headless bootstrap. If both set and DB is empty,
       # creates this admin on first start. Otherwise, complete setup in the UI.
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-}
 
       # ── AI extraction (optional, BYO key) ─────────────────────────────
       # Env wins over the in-app Settings page. Leave unset to configure

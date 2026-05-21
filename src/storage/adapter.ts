@@ -5,9 +5,8 @@ export type NewPendingUrl = Omit<PendingUrl, 'id' | 'createdAt'>
 
 export interface StoredLocalUser {
   id: string
-  email: string
+  username: string
   passwordHash: string
-  displayName: string
   role: 'admin'
   createdAt: number
 }
@@ -30,7 +29,7 @@ export interface DataAdapter {
 
   countUsers(): Promise<number>
   findUserById(id: string): Promise<StoredLocalUser | null>
-  findUserByEmail(email: string): Promise<StoredLocalUser | null>
+  findUserByUsername(username: string): Promise<StoredLocalUser | null>
   createUser(input: NewLocalUser): Promise<StoredLocalUser>
   /**
    * Insert the first admin under a serialized write so two concurrent

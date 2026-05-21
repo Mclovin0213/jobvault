@@ -3,8 +3,7 @@ import { apiFetch } from '@/storage/rest/client'
 
 export interface AuthUser {
   id: string
-  email: string
-  displayName: string
+  username: string
   role: 'admin'
 }
 

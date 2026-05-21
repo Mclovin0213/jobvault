@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 
 export function Login({ onSignedIn }: { onSignedIn: () => void }) {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -18,12 +18,12 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
     try {
       await apiFetch('/api/auth/login', {
         method: 'POST',
-        body: { email, password },
+        body: { username, password },
       })
       onSignedIn()
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError('Invalid email or password.')
+        setError('Invalid username or password.')
       } else if (err instanceof ApiError && err.status === 429) {
         setError('Too many attempts. Try again in a minute.')
       } else {
@@ -47,12 +47,12 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
           </p>
           <form onSubmit={submit} className="mt-6 space-y-3">
             <Input
-              type="email"
-              autoComplete="email"
+              type="text"
+              autoComplete="username"
               required
-              placeholder="Email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              placeholder="Username"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
               disabled={busy}
             />
             <Input

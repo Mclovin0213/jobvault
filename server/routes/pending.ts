@@ -27,7 +27,7 @@ app.post('/', async c => {
     ...p,
     hostname: hostnameOf(p.url),
     addedBy: auth.user.id,
-    addedByName: auth.user.displayName,
+    addedByName: auth.user.username,
   }))
   const created = await (await getAdapter()).createPendingUrls(stamped)
   return c.json(created, 201)
@@ -67,7 +67,7 @@ app.post('/:id/approve', async c => {
   const application = {
     ...body,
     addedBy: auth.user.id,
-    addedByName: auth.user.displayName,
+    addedByName: auth.user.username,
     appliedAt: body.appliedAt ?? (body.status === 'applied' ? Date.now() : null),
   }
   try {

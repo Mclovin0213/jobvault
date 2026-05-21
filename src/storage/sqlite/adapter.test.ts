@@ -20,6 +20,7 @@ const MIGRATIONS = [
   resolve(__dirname, 'migrations/0000_faulty_bloodscream.sql'),
   resolve(__dirname, 'migrations/0001_acoustic_corsair.sql'),
   resolve(__dirname, 'migrations/0002_local_auth.sql'),
+  resolve(__dirname, 'migrations/0003_rename_email_to_username.sql'),
 ]
 
 async function applyMigrations(client: Database.Database) {
@@ -67,9 +68,8 @@ function newApp(overrides: Partial<NewApplication> = {}): NewApplication {
 
 function newUser(overrides: Partial<NewLocalUser> = {}): NewLocalUser {
   return {
-    email: 'admin@example.com',
+    username: 'admin',
     passwordHash: 'scrypt$1$AAAA$BBBB',
-    displayName: 'Admin',
     role: 'admin',
     ...overrides,
   }
@@ -204,43 +204,43 @@ describe('SqliteDataAdapter', () => {
   })
 
   describe('user persistence', () => {
-    it('createUser round-trips and normalizes email to lowercase', async () => {
-      const u = await adapter.createUser(newUser({ email: '  Alex@Example.COM ' }))
+    it('createUser round-trips and normalizes username to lowercase', async () => {
+      const u = await adapter.createUser(newUser({ username: '  Alex_01 ' }))
       expect(u.id).toMatch(/^[0-9a-f-]{36}$/)
-      expect(u.email).toBe('alex@example.com')
+      expect(u.username).toBe('alex_01')
       expect(u.role).toBe('admin')
       expect(typeof u.createdAt).toBe('number')
 
       expect(await adapter.countUsers()).toBe(1)
       const byId = await adapter.findUserById(u.id)
-      expect(byId?.email).toBe('alex@example.com')
+      expect(byId?.username).toBe('alex_01')
       expect(byId?.passwordHash).toBe('scrypt$1$AAAA$BBBB')
     })
 
-    it('findUserByEmail matches case-insensitively', async () => {
-      await adapter.createUser(newUser({ email: 'alex@example.com' }))
-      const found = await adapter.findUserByEmail('ALEX@Example.com')
-      expect(found?.email).toBe('alex@example.com')
-      expect(await adapter.findUserByEmail('nobody@example.com')).toBeNull()
+    it('findUserByUsername matches case-insensitively', async () => {
+      await adapter.createUser(newUser({ username: 'alex' }))
+      const found = await adapter.findUserByUsername('ALEX')
+      expect(found?.username).toBe('alex')
+      expect(await adapter.findUserByUsername('nobody')).toBeNull()
     })
 
     it('findUserById returns null for unknown id', async () => {
       expect(await adapter.findUserById('does-not-exist')).toBeNull()
     })
 
-    it('createUser rejects duplicate emails via the unique index', async () => {
-      await adapter.createUser(newUser({ email: 'dup@example.com' }))
-      await expect(adapter.createUser(newUser({ email: 'DUP@example.com' }))).rejects.toThrow()
+    it('createUser rejects duplicate usernames via the unique index', async () => {
+      await adapter.createUser(newUser({ username: 'dup' }))
+      await expect(adapter.createUser(newUser({ username: 'DUP' }))).rejects.toThrow()
       expect(await adapter.countUsers()).toBe(1)
     })
 
     it('createInitialUser inserts when empty and throws once any user exists', async () => {
-      const first = await adapter.createInitialUser(newUser({ email: 'first@example.com' }))
-      expect(first.email).toBe('first@example.com')
+      const first = await adapter.createInitialUser(newUser({ username: 'first' }))
+      expect(first.username).toBe('first')
       expect(await adapter.countUsers()).toBe(1)
 
       await expect(
-        adapter.createInitialUser(newUser({ email: 'second@example.com' })),
+        adapter.createInitialUser(newUser({ username: 'second' })),
       ).rejects.toThrow(/setup_already_complete/)
       expect(await adapter.countUsers()).toBe(1)
     })

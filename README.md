@@ -40,7 +40,7 @@ Open <http://localhost:3000>. The DB is created and migrated on first boot.
 ## First run
 
 1. Start the app (Docker above, or `bun install && SESSION_SECRET=$(openssl rand -base64 48) bun run start`).
-2. Open <http://localhost:3000>. You'll see a one-time setup form — pick a display name, email, and a password (12+ characters). That account becomes the admin.
+2. Open <http://localhost:3000>. You'll see a one-time setup form — pick a username (3-32 characters) and a password (12+ characters). That account becomes the admin.
 3. Optionally configure an AI provider in step 2 of the setup, or skip and set it up later under **Settings**.
 
 ### Headless / declarative bootstrap
@@ -52,7 +52,7 @@ docker run \
   -p 3000:3000 \
   -v ./data:/app/data \
   -e SESSION_SECRET=$(openssl rand -base64 48) \
-  -e ADMIN_EMAIL=you@example.com \
+  -e ADMIN_USERNAME=admin \
   -e ADMIN_PASSWORD='a-long-passphrase-or-random-string' \
   ghcr.io/mclovin0213/jobvault:latest
 ```
@@ -61,7 +61,7 @@ These env vars are only read when the database is empty — they don't override 
 
 ### Lost the admin password?
 
-There's no email-based reset (Jobvault is self-hosted and doesn't ship an SMTP integration). Recover by clearing the users table and re-running setup:
+There's no password-reset flow (Jobvault is self-hosted and doesn't ship an SMTP integration). Recover by clearing the users table and re-running setup:
 
 ```bash
 docker compose exec app sqlite3 /app/data/app.db 'DELETE FROM users;'
@@ -99,7 +99,7 @@ Vite proxies `/api/*` to the Bun server, so you can use either port during dev.
 - **Applications grid** with search, chip filters, group-by (status / source / month-added), sort-by (date added / applied / deadline / company). Two-tier rows: compact-by-default, click to expand for inline edits.
 - **Pending queue** to triage before promoting to a tracked application.
 - **Dashboard** — streak, applied-today, funnel, weekday heatmap, source / contributor breakdowns. All computed client-side from a single source of truth.
-- **Self-host first** — email/password auth backed by local SQLite, set up in-app on first run or via `ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars for headless deploys. Sessions are sealed cookies (iron-session); passwords are scrypt-hashed.
+- **Self-host first** — username/password auth backed by local SQLite, set up in-app on first run or via `ADMIN_USERNAME`/`ADMIN_PASSWORD` env vars for headless deploys. Sessions are sealed cookies (iron-session); passwords are scrypt-hashed.
 
 ## Documentation
 

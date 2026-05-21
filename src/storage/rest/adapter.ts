@@ -74,8 +74,8 @@ export class RestDataAdapter implements DataAdapter {
     throw new Error('findUserById is server-only')
   }
 
-  async findUserByEmail(): Promise<StoredLocalUser | null> {
-    throw new Error('findUserByEmail is server-only')
+  async findUserByUsername(): Promise<StoredLocalUser | null> {
+    throw new Error('findUserByUsername is server-only')
   }
 
   async createUser(): Promise<StoredLocalUser> {

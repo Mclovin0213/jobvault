@@ -23,14 +23,13 @@ vi.mock('../lib/users.ts', () => ({
     id === 'u-1'
       ? {
           id: 'u-1',
-          email: 'a@b.com',
+          username: 'tester',
           passwordHash: 'scrypt$x$y$z$AA==$BB==',
-          displayName: 'A',
           role: 'admin' as const,
           createdAt: 0,
         }
       : null,
-  findUserByEmail: async () => null,
+  findUserByUsername: async () => null,
   createUser: async () => {
     throw new Error('not used')
   },

@@ -1,17 +1,23 @@
-import { countUsers, createUser, findUserByEmail } from './users.ts'
+import { countUsers, createUser, findUserByUsername } from './users.ts'
 
 const MIN_PASSWORD_LEN = 12
+const USERNAME_RE = /^[a-zA-Z0-9._-]{3,32}$/
 
 export async function maybeBootstrapAdmin(): Promise<void> {
-  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase()
+  const username = process.env.ADMIN_USERNAME?.trim().toLowerCase()
   const password = process.env.ADMIN_PASSWORD
-  const displayNameEnv = process.env.ADMIN_DISPLAY_NAME?.trim()
 
-  if (!email && !password) return
+  if (!username && !password) return
 
-  if (!email || !password) {
+  if (!username || !password) {
     throw new Error(
-      'ADMIN_EMAIL and ADMIN_PASSWORD must be set together (or both left unset).',
+      'ADMIN_USERNAME and ADMIN_PASSWORD must be set together (or both left unset).',
+    )
+  }
+
+  if (!USERNAME_RE.test(username)) {
+    throw new Error(
+      'ADMIN_USERNAME must be 3-32 characters: letters, numbers, and . _ - only.',
     )
   }
 
@@ -21,12 +27,10 @@ export async function maybeBootstrapAdmin(): Promise<void> {
 
   if ((await countUsers()) > 0) return
 
-  if (await findUserByEmail(email)) return
+  if (await findUserByUsername(username)) return
 
-  const displayName =
-    displayNameEnv && displayNameEnv.length > 0 ? displayNameEnv : email.split('@')[0]
-  await createUser({ email, password, displayName })
+  await createUser({ username, password })
   console.log(
-    `[bootstrap] Created admin user ${email} from ADMIN_EMAIL/ADMIN_PASSWORD env vars.`,
+    `[bootstrap] Created admin user ${username} from ADMIN_USERNAME/ADMIN_PASSWORD env vars.`,
   )
 }

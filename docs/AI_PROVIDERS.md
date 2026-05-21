@@ -6,7 +6,7 @@ The model is **bring-your-own-key**: you supply credentials, no key ships with t
 
 ## Two ways to configure
 
-Configuration is resolved with an **env-wins, DB-fallback** policy — the same pattern as the email allowlist (`server/lib/allowlist.ts`):
+Configuration is resolved with an **env-wins, DB-fallback** policy:
 
 1. **Environment variables** (override). If `AI_PROVIDER` is set (or, for back-compat, just `MINIMAX_API_KEY` with no `AI_PROVIDER`), the env values are used and the in-app Settings page becomes read-only. Best for reproducible / infra-as-code deployments (docker-compose).
 2. **In-app Settings page** (fallback). If no AI env vars are set, configure the provider, model, key, and (if needed) base URL under the **Settings** tab, click **Test connection**, and **Save**. No restart needed. Best for casual self-hosters.

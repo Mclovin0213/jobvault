@@ -52,9 +52,8 @@ describe('GET /api/auth/me', () => {
 
   it('returns signed-out when users exist but no session', async () => {
     await adapter.createUser({
-      email: 'a@b.com',
+      username: 'alpha',
       passwordHash: 'scrypt$x$y$z$AA==$BB==',
-      displayName: 'A',
       role: 'admin',
     })
     const r = await buildApp().request('/api/auth/me')
@@ -64,9 +63,8 @@ describe('GET /api/auth/me', () => {
 
   it('returns signed-in when session matches a user', async () => {
     const u = await adapter.createUser({
-      email: 'a@b.com',
+      username: 'alpha',
       passwordHash: 'scrypt$x$y$z$AA==$BB==',
-      displayName: 'A',
       role: 'admin',
     })
     session = { userId: u.id }
@@ -74,7 +72,7 @@ describe('GET /api/auth/me', () => {
     expect(r.status).toBe(200)
     expect(await r.json()).toEqual({
       status: 'signed-in',
-      user: { id: u.id, email: 'a@b.com', displayName: 'A', role: 'admin' },
+      user: { id: u.id, username: 'alpha', role: 'admin' },
     })
   })
 
@@ -89,27 +87,24 @@ describe('GET /api/auth/me', () => {
 describe('POST /api/auth/setup', () => {
   it('creates the first admin and signs them in', async () => {
     const r = await json(buildApp(), '/api/auth/setup', 'POST', {
-      displayName: 'Alex',
-      email: 'Alex@Example.com',
+      username: 'Alex',
       password: 'correct-horse-battery-staple',
     })
     expect(r.status).toBe(200)
-    const body = (await r.json()) as { status: string; user: { email: string } }
+    const body = (await r.json()) as { status: string; user: { username: string } }
     expect(body.status).toBe('signed-in')
-    expect(body.user.email).toBe('alex@example.com')
+    expect(body.user.username).toBe('alex')
     expect(session.userId).toBeDefined()
   })
 
   it('returns 410 once a user already exists', async () => {
     await adapter.createUser({
-      email: 'a@b.com',
+      username: 'alpha',
       passwordHash: 'scrypt$x$y$z$AA==$BB==',
-      displayName: 'A',
       role: 'admin',
     })
     const r = await json(buildApp(), '/api/auth/setup', 'POST', {
-      displayName: 'Alex',
-      email: 'alex@example.com',
+      username: 'alex',
       password: 'correct-horse-battery-staple',
     })
     expect(r.status).toBe(410)
@@ -118,17 +113,15 @@ describe('POST /api/auth/setup', () => {
 
   it('rejects passwords shorter than 12 chars', async () => {
     const r = await json(buildApp(), '/api/auth/setup', 'POST', {
-      displayName: 'Alex',
-      email: 'alex@example.com',
+      username: 'alex',
       password: 'short',
     })
     expect(r.status).toBe(400)
   })
 
-  it('rejects malformed emails', async () => {
+  it('rejects malformed usernames', async () => {
     const r = await json(buildApp(), '/api/auth/setup', 'POST', {
-      displayName: 'Alex',
-      email: 'not-an-email',
+      username: 'bad name!',
       password: 'correct-horse-battery-staple',
     })
     expect(r.status).toBe(400)
@@ -144,8 +137,7 @@ describe('POST /api/auth/setup', () => {
       return realCreate(input)
     }
     const r = await json(buildApp(), '/api/auth/setup', 'POST', {
-      displayName: 'Alex',
-      email: 'alex@example.com',
+      username: 'alex',
       password: 'correct-horse-battery-staple',
     })
     expect(r.status).toBe(410)
@@ -157,15 +149,14 @@ describe('POST /api/auth/login', () => {
   beforeEach(async () => {
     const { createUser } = await import('../lib/users')
     await createUser({
-      email: 'alex@example.com',
+      username: 'alex',
       password: 'correct-horse-battery-staple',
-      displayName: 'Alex',
     })
   })
 
-  it('signs in with valid credentials (case-insensitive email)', async () => {
+  it('signs in with valid credentials (case-insensitive username)', async () => {
     const r = await json(buildApp(), '/api/auth/login', 'POST', {
-      email: 'Alex@Example.com',
+      username: 'Alex',
       password: 'correct-horse-battery-staple',
     })
     expect(r.status).toBe(200)
@@ -176,7 +167,7 @@ describe('POST /api/auth/login', () => {
 
   it('returns 401 generic error on bad password', async () => {
     const r = await json(buildApp(), '/api/auth/login', 'POST', {
-      email: 'alex@example.com',
+      username: 'alex',
       password: 'wrong-but-long-enough',
     })
     expect(r.status).toBe(401)
@@ -184,9 +175,9 @@ describe('POST /api/auth/login', () => {
     expect(session.userId).toBeUndefined()
   })
 
-  it('returns 401 generic error on unknown email (no enumeration)', async () => {
+  it('returns 401 generic error on unknown username (no enumeration)', async () => {
     const r = await json(buildApp(), '/api/auth/login', 'POST', {
-      email: 'nobody@example.com',
+      username: 'nobody',
       password: 'correct-horse-battery-staple',
     })
     expect(r.status).toBe(401)
@@ -197,12 +188,12 @@ describe('POST /api/auth/login', () => {
     const app = buildApp()
     for (let i = 0; i < 5; i++) {
       await json(app, '/api/auth/login', 'POST', {
-        email: 'alex@example.com',
+        username: 'alex',
         password: 'wrong-but-long-enough',
       })
     }
     const r = await json(app, '/api/auth/login', 'POST', {
-      email: 'alex@example.com',
+      username: 'alex',
       password: 'correct-horse-battery-staple',
     })
     expect(r.status).toBe(429)

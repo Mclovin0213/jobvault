@@ -21,7 +21,7 @@ Open <http://localhost:3000>. On first boot:
 
 - `data/app.db` is created if missing.
 - Drizzle migrations from `src/storage/sqlite/migrations/` are applied automatically.
-- The first page load shows a one-time setup form. Pick a display name, email, and password (12+ chars) — that creates the admin user. For headless / Docker deploys, set `ADMIN_EMAIL` + `ADMIN_PASSWORD` instead and the admin is created at boot.
+- The first page load shows a one-time setup form. Pick a username (3-32 chars) and password (12+ chars) — that creates the admin user. For headless / Docker deploys, set `ADMIN_USERNAME` + `ADMIN_PASSWORD` instead and the admin is created at boot.
 
 ## Configuration
 
@@ -51,7 +51,7 @@ Migrations apply automatically at boot. If a migration fails, the server exits b
 For anything beyond a localhost-only personal install:
 
 1. **`SESSION_SECRET`** is required and must be ≥ 32 characters. Generate one with `openssl rand -base64 48`. The server refuses to start without it.
-2. **Bootstrap the admin** either via the in-app setup form (visit the site once and create the account) or via `ADMIN_EMAIL` + `ADMIN_PASSWORD` env vars (created at first boot when the DB is empty).
+2. **Bootstrap the admin** either via the in-app setup form (visit the site once and create the account) or via `ADMIN_USERNAME` + `ADMIN_PASSWORD` env vars (created at first boot when the DB is empty).
 3. **TLS** must be terminated upstream (nginx, Caddy, Cloudflare). Bun serves plain HTTP.
 
 ## Docker

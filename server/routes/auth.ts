@@ -24,19 +24,25 @@ function clientIp(c: import('hono').Context): string {
   return 'anon'
 }
 
+const usernameSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(32)
+  .regex(/^[a-zA-Z0-9._-]+$/, 'Username may only contain letters, numbers, and . _ -')
+
 const setupSchema = z.object({
-  displayName: z.string().trim().min(1).max(80),
-  email: z.string().trim().email().max(254),
+  username: usernameSchema,
   password: z.string().min(12).max(200),
 })
 
 const loginSchema = z.object({
-  email: z.string().trim().email().max(254),
+  username: z.string().trim().min(1).max(32),
   password: z.string().min(1).max(200),
 })
 
-function toPublicUser(u: { id: string; email: string; displayName: string; role: 'admin' }) {
-  return { id: u.id, email: u.email, displayName: u.displayName, role: u.role }
+function toPublicUser(u: { id: string; username: string; role: 'admin' }) {
+  return { id: u.id, username: u.username, role: u.role }
 }
 
 app.get('/me', async c => {
@@ -85,7 +91,7 @@ app.post('/login', async c => {
   }
   const parsed = await parseBody(c, loginSchema)
   if (!parsed.ok) return parsed.response
-  const user = await verifyUserPassword(parsed.data.email, parsed.data.password)
+  const user = await verifyUserPassword(parsed.data.username, parsed.data.password)
   if (!user) return c.json({ error: 'invalid_credentials' }, 401)
   await saveAppSession(c, { userId: user.id })
   return c.json({ status: 'signed-in', user: toPublicUser(user) })

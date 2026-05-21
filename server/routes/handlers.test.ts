@@ -22,7 +22,7 @@ vi.mock('../lib/users.ts', () => ({
   countUsers: async () => (sessionUser ? 1 : 0),
   findUserById: async (id: string) =>
     sessionUser && sessionUser.id === id ? sessionUser : null,
-  findUserByEmail: async () => null,
+  findUserByUsername: async () => null,
   createUser: async () => sessionUser!,
   createInitialUser: async () => sessionUser!,
   verifyUserPassword: async () => null,
@@ -49,9 +49,8 @@ const EMPTY_EXTRACTED = {
 
 const TEST_USER: StoredLocalUser = {
   id: 'u-1',
-  email: 'a@b.com',
+  username: 'tester',
   passwordHash: 'scrypt$x$y$z$AA==$BB==',
-  displayName: 'A',
   role: 'admin',
   createdAt: 0,
 }
@@ -113,7 +112,7 @@ describe('POST /api/applications', () => {
     expect(r.status).toBe(201)
     const body = (await r.json()) as { addedBy: string; addedByName: string }
     expect(body.addedBy).toBe('u-1')
-    expect(body.addedByName).toBe('A')
+    expect(body.addedByName).toBe('tester')
   })
 })
 

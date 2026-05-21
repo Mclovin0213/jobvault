@@ -40,16 +40,17 @@ function Steps({ current }: { current: Step }) {
 }
 
 function AccountStep({ onDone }: { onDone: () => void }) {
-  const [displayName, setDisplayName] = useState('')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function validate(): string | null {
-    if (!displayName.trim()) return 'Display name is required.'
-    if (!email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'Enter a valid email.'
+    const u = username.trim()
+    if (u.length < 3 || u.length > 32) return 'Username must be 3-32 characters.'
+    if (!/^[a-zA-Z0-9._-]+$/.test(u))
+      return 'Username may only contain letters, numbers, and . _ -'
     if (password.length < 12) return 'Password must be at least 12 characters.'
     if (password !== confirm) return 'Passwords do not match.'
     return null
@@ -67,7 +68,7 @@ function AccountStep({ onDone }: { onDone: () => void }) {
     try {
       await apiFetch('/api/auth/setup', {
         method: 'POST',
-        body: { displayName: displayName.trim(), email: email.trim(), password },
+        body: { username: username.trim(), password },
       })
       onDone()
     } catch (err) {
@@ -95,20 +96,14 @@ function AccountStep({ onDone }: { onDone: () => void }) {
       <CardContent>
         <form onSubmit={submit} className="space-y-3">
           <Input
-            placeholder="Display name"
-            value={displayName}
-            onChange={e => setDisplayName(e.target.value)}
-            autoComplete="name"
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            autoComplete="username"
             required
-            disabled={busy}
-          />
-          <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            autoComplete="email"
-            required
+            minLength={3}
+            maxLength={32}
             disabled={busy}
           />
           <Input

@@ -82,6 +82,10 @@ export class RestDataAdapter implements DataAdapter {
     throw new Error('createUser is server-only')
   }
 
+  async createInitialUser(): Promise<StoredLocalUser> {
+    throw new Error('createInitialUser is server-only')
+  }
+
   // AI settings flow through the dedicated /api/settings/* endpoints
   // (src/lib/aiSettings.ts), not the storage adapter.
   async getAiSettings(): Promise<AiSettingsRow | null> {

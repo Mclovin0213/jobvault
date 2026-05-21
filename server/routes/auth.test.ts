@@ -133,6 +133,24 @@ describe('POST /api/auth/setup', () => {
     })
     expect(r.status).toBe(400)
   })
+
+  it('returns 410 when adapter.createInitialUser detects a race', async () => {
+    // Simulate: another request slipped in between the route's pre-check
+    // and the atomic insert. The adapter throws and we should surface 410,
+    // not a 500.
+    const realCreate = adapter.createInitialUser.bind(adapter)
+    adapter.createInitialUser = async input => {
+      await adapter.createUser(input)
+      return realCreate(input)
+    }
+    const r = await json(buildApp(), '/api/auth/setup', 'POST', {
+      displayName: 'Alex',
+      email: 'alex@example.com',
+      password: 'correct-horse-battery-staple',
+    })
+    expect(r.status).toBe(410)
+    expect(await r.json()).toEqual({ error: 'setup_already_complete' })
+  })
 })
 
 describe('POST /api/auth/login', () => {

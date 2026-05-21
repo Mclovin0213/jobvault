@@ -17,6 +17,10 @@ function sessionPassword(): string {
   return s
 }
 
+export function assertSessionSecret(): void {
+  sessionPassword()
+}
+
 function isProd(): boolean {
   return process.env.NODE_ENV === 'production'
 }

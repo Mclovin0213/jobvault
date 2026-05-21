@@ -8,6 +8,7 @@ import auth from './routes/auth.ts'
 import extract from './routes/extract.ts'
 import settings from './routes/settings.ts'
 import { getAdapter } from './lib/db.ts'
+import { assertSessionSecret } from './lib/session.ts'
 
 function loadEnv(): void {
   if (process.env.DATABASE_URL) return
@@ -21,6 +22,7 @@ function loadEnv(): void {
 }
 
 loadEnv()
+assertSessionSecret()
 
 const app = new Hono()
 

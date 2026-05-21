@@ -205,6 +205,31 @@ export class SqliteDataAdapter implements DataAdapter {
     return rowToUser(row as typeof users.$inferSelect)
   }
 
+  async createInitialUser(input: NewLocalUser): Promise<StoredLocalUser> {
+    const row: typeof users.$inferInsert = {
+      id: crypto.randomUUID(),
+      email: input.email.trim().toLowerCase(),
+      passwordHash: input.passwordHash,
+      displayName: input.displayName,
+      role: input.role,
+      createdAt: Date.now(),
+    }
+    this.db.transaction(
+      tx => {
+        // BEGIN IMMEDIATE acquires the SQLite write lock up front, so a
+        // concurrent setup request will be serialized behind us instead of
+        // racing past the count check.
+        const existing = tx.select({ id: users.id }).from(users).limit(1).all()
+        if (existing.length > 0) {
+          throw new Error('setup_already_complete')
+        }
+        tx.insert(users).values(row).run()
+      },
+      { behavior: 'immediate' },
+    )
+    return rowToUser(row as typeof users.$inferSelect)
+  }
+
   async getAiSettings(): Promise<AiSettingsRow | null> {
     const rows = await this.db
       .select()

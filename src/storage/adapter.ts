@@ -32,6 +32,12 @@ export interface DataAdapter {
   findUserById(id: string): Promise<StoredLocalUser | null>
   findUserByEmail(email: string): Promise<StoredLocalUser | null>
   createUser(input: NewLocalUser): Promise<StoredLocalUser>
+  /**
+   * Insert the first admin under a serialized write so two concurrent
+   * setup requests can't both succeed. Throws `setup_already_complete`
+   * if any user already exists.
+   */
+  createInitialUser(input: NewLocalUser): Promise<StoredLocalUser>
 
   getAiSettings(): Promise<AiSettingsRow | null>
   setAiSettings(patch: Partial<Omit<AiSettingsRow, 'updatedAt'>>): Promise<void>

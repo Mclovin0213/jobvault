@@ -24,6 +24,7 @@ vi.mock('../lib/users.ts', () => ({
     sessionUser && sessionUser.id === id ? sessionUser : null,
   findUserByEmail: async () => null,
   createUser: async () => sessionUser!,
+  createInitialUser: async () => sessionUser!,
   verifyUserPassword: async () => null,
 }))
 

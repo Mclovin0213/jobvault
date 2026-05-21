@@ -9,7 +9,7 @@ import {
 } from '../lib/session.ts'
 import {
   countUsers,
-  createUser,
+  createInitialUser,
   findUserById,
   verifyUserPassword,
 } from '../lib/users.ts'
@@ -64,11 +64,15 @@ app.post('/setup', async c => {
   const parsed = await parseBody(c, setupSchema)
   if (!parsed.ok) return parsed.response
 
-  if ((await countUsers()) > 0) {
-    return c.json({ error: 'setup_already_complete' }, 410)
+  let user
+  try {
+    user = await createInitialUser(parsed.data)
+  } catch (e) {
+    if (e instanceof Error && e.message === 'setup_already_complete') {
+      return c.json({ error: 'setup_already_complete' }, 410)
+    }
+    throw e
   }
-
-  const user = await createUser(parsed.data)
   await saveAppSession(c, { userId: user.id })
   return c.json({ status: 'signed-in', user: toPublicUser(user) })
 })

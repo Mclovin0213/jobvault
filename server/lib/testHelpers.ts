@@ -91,6 +91,21 @@ export function memoryAdapter(initial: { users?: StoredLocalUser[] } = {}): Data
       users.push(user)
       return user
     },
+    async createInitialUser(input: NewLocalUser) {
+      if (users.length > 0) {
+        throw new Error('setup_already_complete')
+      }
+      const user: StoredLocalUser = {
+        id: id(),
+        email: input.email.trim().toLowerCase(),
+        passwordHash: input.passwordHash,
+        displayName: input.displayName,
+        role: input.role,
+        createdAt: Date.now(),
+      }
+      users.push(user)
+      return user
+    },
     async getAiSettings() {
       return aiSettings ? { ...aiSettings } : null
     },

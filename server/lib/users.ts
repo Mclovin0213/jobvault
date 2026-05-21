@@ -30,6 +30,16 @@ export async function createUser(input: CreateUserInput): Promise<StoredLocalUse
   })
 }
 
+export async function createInitialUser(input: CreateUserInput): Promise<StoredLocalUser> {
+  const passwordHash = await hashPassword(input.password)
+  return (await getAdapter()).createInitialUser({
+    email: input.email,
+    displayName: input.displayName,
+    passwordHash,
+    role: 'admin',
+  })
+}
+
 export async function verifyUserPassword(
   email: string,
   password: string,

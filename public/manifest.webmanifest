@@ -1,0 +1,14 @@
+{
+  "name": "Jobvault",
+  "short_name": "Jobvault",
+  "description": "Polished, self-hostable, human-in-the-loop job-application tracker.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1228",
+  "theme_color": "#0e1228",
+  "icons": [
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

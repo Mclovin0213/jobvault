@@ -60,9 +60,11 @@ export function Nav({
       <div className="mx-auto max-w-7xl px-4 py-3">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="inline-flex size-7 items-center justify-center rounded-md bg-gradient-to-br from-[var(--color-chart-1)] to-[var(--color-chart-2)] text-xs font-bold text-white shadow-[0_4px_12px_-4px_oklch(0.55_0.22_275/0.6)]">
-              J
-            </span>
+            <img
+              src="/logo.svg"
+              alt="Jobvault"
+              className="h-7 w-auto"
+            />
             <span className="bg-gradient-to-r from-[var(--color-foreground)] to-[var(--color-foreground)]/70 bg-clip-text text-base font-semibold tracking-tight text-transparent">
               Jobvault
             </span>

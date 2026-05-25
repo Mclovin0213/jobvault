@@ -17,10 +17,13 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
-          - os: macos-13
+            node-arch: arm64
+          - os: macos-14
             target: x86_64-apple-darwin
+            node-arch: x64
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            node-arch: x64
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -36,6 +39,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          architecture: ${{ matrix.node-arch }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -70,6 +74,15 @@ jobs:
 
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
+
+      - name: Cross-fetch x64 better-sqlite3 binary (Intel-on-Apple-Silicon)
+        # When we build x86_64-apple-darwin on an arm64 runner, bun install
+        # downloaded the arm64 prebuilt of better-sqlite3. prepare-tauri-sidecar
+        # copies that .node file straight into the bundle, so we have to swap
+        # it for the x64 prebuilt before the bundle is assembled.
+        if: matrix.target == 'x86_64-apple-darwin' && runner.os == 'macOS'
+        working-directory: node_modules/better-sqlite3
+        run: npx prebuild-install --runtime=node --target_arch=x64 --target_platform=darwin --force
 
       - name: Build SPA + server bundle
         run: |

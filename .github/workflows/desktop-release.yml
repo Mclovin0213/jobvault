@@ -17,13 +17,10 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
-            node-arch: arm64
           - os: macos-14
             target: x86_64-apple-darwin
-            node-arch: x64
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            node-arch: x64
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -35,14 +32,13 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install Node (matches sidecar)
+      - name: Install Node (host — runs Vite/rolldown for the SPA build)
         uses: actions/setup-node@v4
         with:
           # Node 22+ — better-sqlite3 12.10 only publishes prebuilts for
           # ABI v127+, and we need a prebuild for the x64-on-arm64 cross
           # case (no system compiler-against-x64-headers in CI).
           node-version: '22'
-          architecture: ${{ matrix.node-arch }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -78,14 +74,21 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
 
-      - name: Cross-fetch x64 better-sqlite3 binary (Intel-on-Apple-Silicon)
-        # When we build x86_64-apple-darwin on an arm64 runner, bun install
-        # downloaded the arm64 prebuilt of better-sqlite3. prepare-tauri-sidecar
-        # copies that .node file straight into the bundle, so we have to swap
-        # it for the x64 prebuilt before the bundle is assembled.
+      - name: Fetch x64 Node + better-sqlite3 for sidecar (Intel-on-Apple-Silicon)
+        # The host build above runs Vite/rolldown with arm64 Node so its
+        # native bindings load. The sidecar shipped inside the .dmg, however,
+        # has to be x64. Fetch a stand-alone x64 Node binary into /tmp and
+        # swap better-sqlite3's prebuilt for the x64 build so prepare-tauri-
+        # sidecar can copy both into the bundle.
         if: matrix.target == 'x86_64-apple-darwin' && runner.os == 'macOS'
-        working-directory: node_modules/better-sqlite3
-        run: npx prebuild-install --runtime=node --target_arch=x64 --target_platform=darwin --force
+        run: |
+          NODE_VER=$(node -v | tr -d v)
+          curl -fsSL "https://nodejs.org/dist/v$NODE_VER/node-v$NODE_VER-darwin-x64.tar.xz" -o /tmp/node-x64.tar.xz
+          mkdir -p /tmp/node-x64
+          tar -xJf /tmp/node-x64.tar.xz -C /tmp/node-x64 --strip-components=1
+          echo "SIDECAR_NODE=/tmp/node-x64/bin/node" >> "$GITHUB_ENV"
+          cd node_modules/better-sqlite3
+          npx prebuild-install --runtime=node --target_arch=x64 --target_platform=darwin --force
 
       - name: Build SPA + server bundle
         run: |

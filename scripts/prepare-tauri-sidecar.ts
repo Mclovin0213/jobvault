@@ -36,6 +36,16 @@ function hostTargetTriple(): string {
 }
 
 function findHostNode(): string {
+  // CI sets SIDECAR_NODE to an out-of-PATH Node binary for cross-arch builds
+  // (e.g. shipping an x86_64 sidecar from an arm64 runner). Local dev just
+  // picks up whatever `which node` returns.
+  const override = process.env.SIDECAR_NODE
+  if (override) {
+    if (!existsSync(override)) {
+      throw new Error(`SIDECAR_NODE=${override} not found`)
+    }
+    return override
+  }
   const cmd = process.platform === 'win32' ? 'where node' : 'which node'
   const out = execSync(cmd, { encoding: 'utf8' }).trim().split(/\r?\n/)[0]
   if (!out || !existsSync(out)) {

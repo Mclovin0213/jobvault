@@ -37,6 +37,23 @@ docker compose up -d
 
 Open <http://localhost:3000>. The DB is created and migrated on first boot.
 
+## Quickstart — desktop app
+
+Prefer a double-clickable app over running a server? Grab the latest build for
+your platform from the [Releases page](https://github.com/julianavellaneda/jobvault/releases/latest):
+
+- **macOS** — `Jobvault_<version>_aarch64.dmg` (Apple Silicon) or `_x64.dmg` (Intel)
+- **Linux** — `jobvault_<version>_amd64.AppImage` or `.deb`
+
+The desktop app is a thin Tauri 2 shell around the same Hono server; data lives
+in your OS app-data dir (`~/Library/Application Support/com.jobvault.desktop/`
+on macOS, `~/.local/share/com.jobvault.desktop/` on Linux) and the session key
+is generated locally on first launch. No external services, no cloud sync.
+
+> Builds are currently **unsigned**. On macOS, right-click → Open the first time
+> (or run `xattr -d com.apple.quarantine /Applications/Jobvault.app`) to bypass
+> Gatekeeper. Signed/notarized builds are a separate follow-up.
+
 ## First run
 
 1. Start the app (Docker above, or `bun install && SESSION_SECRET=$(openssl rand -base64 48) bun run start`).

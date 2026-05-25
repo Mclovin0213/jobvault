@@ -6,6 +6,40 @@ All notable changes to this project are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-25
+
+Desktop app: Jobvault now ships a native desktop shell (macOS / Linux) built
+on Tauri 2 alongside the existing self-host server. Same SQLite-backed app,
+just packaged as a `.dmg` / `.AppImage` / `.deb` you can double-click.
+
+### Added
+- **Tauri 2 desktop shell** (`src-tauri/`). A small Rust host spawns the
+  existing Hono server as a Node sidecar bound to a free localhost port,
+  waits for `/api/auth/me` to come up, then opens a webview pointed at it.
+  Data lives in the OS app-data dir (`~/Library/Application Support/com.jobvault.desktop/`
+  on macOS, `~/.local/share/com.jobvault.desktop/` on Linux); sessions are
+  sealed with a `session.key` generated on first launch (`0600`).
+- **`desktop-release` GitHub Actions workflow** builds unsigned bundles for
+  `aarch64-apple-darwin`, `x86_64-apple-darwin`, and `x86_64-unknown-linux-gnu`
+  on tag push and attaches them to the GitHub Release.
+- **In-app confirm dialog** (`src/lib/confirm.tsx`). Tauri 2's macOS webview
+  disables `window.confirm()`, so delete / reject prompts now route through
+  a Radix Dialog with a fallback to the native prompt when the webview
+  supports it.
+
+### Changed
+- `server/index.ts` honors `DIST_DIR` so the Tauri sidecar can point at the
+  bundled SPA outside the server's CWD. Behavior in the standard `bun run
+  start` self-host path is unchanged.
+
+## [0.3.1] - 2026-05-22
+
+### Changed
+- Branding refresh: replaced the placeholder "J" monogram with the Jobvault
+  logo SVG in the nav, added a full favicon set (ICO + 16/32 PNGs +
+  apple-touch-icon + maskable icons), and wired up a PWA web manifest with
+  a matching theme color.
+
 ## [0.3.0] - 2026-05-21
 
 Self-host onboarding: Jobvault now ships its own local authentication instead
@@ -117,7 +151,9 @@ Initial OSS release.
   CI, and OSS scaffolding (AGPL-3.0 license, CONTRIBUTING, CODE_OF_CONDUCT,
   SECURITY policy, issue/PR templates).
 
-[Unreleased]: https://github.com/julianavellaneda/jobvault/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/julianavellaneda/jobvault/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/julianavellaneda/jobvault/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/julianavellaneda/jobvault/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/julianavellaneda/jobvault/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/julianavellaneda/jobvault/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/julianavellaneda/jobvault/compare/v0.1.1...v0.2.0

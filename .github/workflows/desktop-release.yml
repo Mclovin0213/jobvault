@@ -96,6 +96,12 @@ jobs:
           bun run build:server
 
       - name: Prepare Tauri sidecar
+        env:
+          # Tells prepare-tauri-sidecar to name the sidecar binary after the
+          # target triple instead of the runner's host (`rustc -vV`), so the
+          # x86_64-apple-darwin build on an arm64 runner emits
+          # `jobvault-node-x86_64-apple-darwin` as Tauri expects.
+          TARGET_TRIPLE: ${{ matrix.target }}
         run: bun run tauri:prepare
 
       - name: Tauri build

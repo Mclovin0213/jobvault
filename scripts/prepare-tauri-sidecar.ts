@@ -20,6 +20,10 @@ const DIST_WEB = resolve(ROOT, 'dist')
 
 function hostTargetTriple(): string {
   // Match Tauri's expected sidecar suffix per `rustc -vV | grep host`.
+  // CI overrides this with TARGET_TRIPLE when building for an arch other
+  // than the runner host (e.g. shipping an x86_64-apple-darwin .dmg from
+  // an arm64 runner).
+  if (process.env.TARGET_TRIPLE) return process.env.TARGET_TRIPLE
   try {
     const out = execSync('rustc -vV', { encoding: 'utf8' })
     const m = out.match(/host:\s*(\S+)/)

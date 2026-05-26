@@ -1,9 +1,10 @@
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import {
   copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   rmSync,
   statSync,
   chmodSync,
@@ -118,6 +119,47 @@ function copyServerBundle() {
   console.log(`✓ server bundle → ${RESOURCES_DIR}`)
 }
 
+function findNodeBinaries(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = resolve(dir, entry.name)
+    if (entry.isDirectory()) findNodeBinaries(full, out)
+    else if (entry.isFile() && entry.name.endsWith('.node')) out.push(full)
+  }
+  return out
+}
+
+function signNativeModules() {
+  // Tauri's bundler copies resources/ into the .app but only signs top-level
+  // Mach-Os (jobvault-desktop, jobvault-node, .app). Native .node modules
+  // inside Resources/ keep whatever signature they shipped with — typically
+  // an ad-hoc one from `prebuild-install`, which fails notarization.
+  //
+  // This runs as part of `tauri:prepare`, which Tauri re-invokes via
+  // `beforeBuildCommand` immediately before bundling — so signing here is the
+  // last write to these files before they land in the .app. A separate
+  // pre-sign step in CI would be undone by that re-invocation.
+  if (process.platform !== 'darwin') return
+  const identity = process.env.APPLE_SIGNING_IDENTITY
+  if (!identity) {
+    console.log('… APPLE_SIGNING_IDENTITY not set, skipping .node signing (local/dev build)')
+    return
+  }
+  const targets = findNodeBinaries(RESOURCES_DIR)
+  if (targets.length === 0) {
+    console.log('… no .node binaries found under resources/, skipping signing')
+    return
+  }
+  for (const file of targets) {
+    console.log(`  signing ${file}`)
+    execFileSync(
+      'codesign',
+      ['--force', '--timestamp', '--options', 'runtime', '--sign', identity, file],
+      { stdio: 'inherit' },
+    )
+  }
+  console.log(`✓ signed ${targets.length} native .node module(s) with Developer ID + timestamp`)
+}
+
 function ensurePrebuiltAssets() {
   // Server bundle: build if missing.
   if (!existsSync(resolve(DIST_SERVER, 'server.mjs'))) {
@@ -138,6 +180,7 @@ function main() {
   console.log(`  target triple: ${triple}`)
   copyNodeBinary(triple)
   copyServerBundle()
+  signNativeModules()
   console.log('\n✓ src-tauri/ ready')
 }
 
